@@ -1,8 +1,19 @@
 {
-  "name": "tauri-browser",
+  "name": "riyo-browser",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "A tabbed desktop browser built on Tauri 2 + WebView2, with a custom title bar, HeroUI UI, history/bookmarks/settings, and a hardened low-telemetry engine.",
+  "author": "Riyoway",
+  "license": "MIT",
+  "homepage": "https://github.com/Riyoway/riyo-browser#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Riyoway/riyo-browser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Riyoway/riyo-browser/issues"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
