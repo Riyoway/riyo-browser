@@ -78,18 +78,25 @@ export const downloadEvents = {
     listen<{ id: string; received: number; total: number }>("downloads-progress", (e) => cb(e.payload)),
 };
 
+// These come from the backend via `emit_to(<this window's label>, …)`, so each
+// listener is scoped to the current window. A plain `listen()` registers with
+// target `Any`, which Tauri matches against EVERY emit regardless of target — so
+// a second window would also fire on this window's events (e.g. a "new tab" link
+// opening in both windows). `appWindow.listen` registers with this window's label
+// so only its own events match.
 export const events = {
   /** A tab navigated (also fires for in-page redirects). */
   onNav: (cb: (e: { id: string; url: string }) => void): Promise<UnlistenFn> =>
-    listen<{ id: string; url: string }>("browser-nav", (e) => cb(e.payload)),
+    appWindow.listen<{ id: string; url: string }>("browser-nav", (e) => cb(e.payload)),
   /** Ctrl/middle-click on a link asked to open a url in a new tab. */
   onNewTab: (cb: (url: string) => void): Promise<UnlistenFn> =>
-    listen<string>("browser-new-tab", (e) => cb(e.payload)),
-  /** The window was restored from the tray; recreate the torn-down active tab. */
+    appWindow.listen<string>("browser-new-tab", (e) => cb(e.payload)),
+  /** The window was restored from the tray; recreate the torn-down active tab.
+   *  Broadcast (not per-window), so this stays a global listener. */
   onMainShown: (cb: () => void): Promise<UnlistenFn> =>
     listen<null>("main-shown", () => cb()),
   /** A browser command forwarded from a tab page (keyboard shortcut or context
    *  menu action); `arg` carries e.g. the search query. */
   onShortcut: (cb: (s: { id: string; cmd: string; arg: string }) => void): Promise<UnlistenFn> =>
-    listen<{ id: string; cmd: string; arg: string }>("browser-shortcut", (e) => cb(e.payload)),
+    appWindow.listen<{ id: string; cmd: string; arg: string }>("browser-shortcut", (e) => cb(e.payload)),
 };
