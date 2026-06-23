@@ -545,17 +545,15 @@ pub fn download_open_folder(app: AppHandle, id: String) -> Result<(), String> {
     reveal_path(&path)
 }
 
-#[cfg(target_os = "windows")]
+// Open the file with the OS default handler. Uses ShellExecuteW on Windows (via
+// `opener`) rather than cmd.exe, so the path is never parsed by a shell — a
+// crafted download filename can't inject commands.
 fn open_path(path: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", path])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    opener::open(path).map_err(|e| e.to_string())
 }
 
+// Reveal the file in the OS file manager. These spawn the file manager process
+// directly (no shell), so the path can't inject commands either.
 #[cfg(target_os = "windows")]
 fn reveal_path(path: &str) -> Result<(), String> {
     std::process::Command::new("explorer")
@@ -566,18 +564,8 @@ fn reveal_path(path: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-fn open_path(path: &str) -> Result<(), String> {
-    std::process::Command::new("open").arg(path).spawn().map(|_| ()).map_err(|e| e.to_string())
-}
-
-#[cfg(target_os = "macos")]
 fn reveal_path(path: &str) -> Result<(), String> {
     std::process::Command::new("open").args(["-R", path]).spawn().map(|_| ()).map_err(|e| e.to_string())
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn open_path(path: &str) -> Result<(), String> {
-    std::process::Command::new("xdg-open").arg(path).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]

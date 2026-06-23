@@ -21,3 +21,6 @@ tokio = { version = "1", features = ["time", "fs", "io-util"] }
 # HTTPS proxy for the New Tab page's data (RSS news etc.) which CORS blocks in
 # the webview. gzip/brotli so compressed feeds are auto-decompressed.
 reqwest = { version = "0.12", features = ["gzip", "brotli"] }
+# Open downloaded files via the OS default handler (ShellExecuteW on Windows) so
+# a file path is never passed through a shell — no command injection.
+opener = "0.7"
