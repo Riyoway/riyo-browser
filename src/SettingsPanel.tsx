@@ -17,6 +17,7 @@ import {
   type Settings,
   type TempUnit,
 } from "./settings";
+import { clearLocPerm } from "./newtabData";
 
 const ENGINES: SearchEngine[] = ["google", "bing", "duckduckgo"];
 
@@ -207,11 +208,16 @@ export function SettingsPanel({
                     The engine's background &ldquo;phone-home&rdquo; traffic is disabled: SmartScreen
                     URL reporting, component/variations updates, Domain Reliability, crash uploads,
                     and the autofill/translate services. Pages you visit still reach their own
-                    servers. The New Tab page also fetches weather (Open-Meteo, with your location
-                    via the browser or ipapi.co), news (BBC), and site icons (DuckDuckGo) from those
-                    third parties.
+                    servers. The New Tab page also fetches weather (Open-Meteo, with your
+                    consented approximate city via ipapi.co — IP-based, never the GPS prompt), news
+                    (BBC), and site icons (DuckDuckGo) from those third parties.
                   </div>
                 </div>
+                <Row label="Location for weather" description="Re-ask whether to use your approximate (IP) location.">
+                  <Button size="sm" variant="flat" onPress={() => clearLocPerm()}>
+                    Reset
+                  </Button>
+                </Row>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="flat" startContent={<Trash2 size={16} />} onPress={onClearHistory}>
                     Clear history

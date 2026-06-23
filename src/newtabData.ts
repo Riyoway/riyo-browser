@@ -64,26 +64,26 @@ async function geoFromQuery(q: string): Promise<Geo | null> {
   }
 }
 
-function geoFromBrowser(): Promise<{ lat: number; lon: number } | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      () => resolve(null),
-      { timeout: 6000, maximumAge: 10 * 60 * 1000 }
-    );
-  });
-}
+// ---- location consent (our own dialog, not the engine's native prompt) ----
+const LOCPERM_KEY = "blankpage.locperm";
+export type LocPerm = "allow" | "block";
 
-async function reverseGeocode(lat: number, lon: number): Promise<string> {
+export function getLocPerm(): LocPerm | null {
+  const v = localStorage.getItem(LOCPERM_KEY);
+  return v === "allow" || v === "block" ? v : null;
+}
+export function setLocPerm(v: LocPerm) {
   try {
-    const r = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
-    );
-    const d = await r.json();
-    return join2([d.city || d.locality, d.principalSubdivision]) || "Current location";
+    localStorage.setItem(LOCPERM_KEY, v);
   } catch {
-    return "Current location";
+    /* ignore */
+  }
+}
+export function clearLocPerm() {
+  try {
+    localStorage.removeItem(LOCPERM_KEY);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -115,16 +115,21 @@ async function geoFromIp(): Promise<Geo | null> {
 
 // `resolved` distinguishes a real lookup from the hardcoded default so the
 // caller doesn't cache (and stick on) the default after a transient failure.
-async function resolveLocation(manual: string): Promise<{ geo: Geo; resolved: boolean }> {
+// A manual location is always honored; otherwise we only IP-geolocate when the
+// user has consented (allowIp) — we never use the engine's geolocation prompt.
+async function resolveLocation(
+  manual: string,
+  allowIp: boolean
+): Promise<{ geo: Geo; resolved: boolean }> {
   const q = manual.trim();
   if (q) {
     const g = await geoFromQuery(q);
     if (g) return { geo: g, resolved: true };
   }
-  const b = await geoFromBrowser();
-  if (b) return { geo: { lat: b.lat, lon: b.lon, label: await reverseGeocode(b.lat, b.lon) }, resolved: true };
-  const ip = await geoFromIp();
-  if (ip) return { geo: ip, resolved: true };
+  if (allowIp) {
+    const ip = await geoFromIp();
+    if (ip) return { geo: ip, resolved: true };
+  }
   return { geo: { lat: 37.7749, lon: -122.4194, label: "San Francisco" }, resolved: false };
 }
 
@@ -141,22 +146,27 @@ export function cachedWeather(loc: string, unit: TempUnit): Weather | null {
   return null;
 }
 
-export async function fetchWeather(manualLoc: string, unit: TempUnit): Promise<Weather> {
+export async function fetchWeather(
+  manualLoc: string,
+  unit: TempUnit,
+  allowIp: boolean
+): Promise<Weather> {
   let geo: Geo | null = null;
   try {
     const gc = JSON.parse(localStorage.getItem(GEO_KEY) || "null");
-    if (gc && Date.now() - gc.ts < GEO_TTL && gc.q === manualLoc) geo = gc.geo;
+    if (gc && Date.now() - gc.ts < GEO_TTL && gc.q === manualLoc && gc.allowIp === allowIp)
+      geo = gc.geo;
   } catch {
     /* ignore */
   }
   if (!geo) {
-    const res = await resolveLocation(manualLoc);
+    const res = await resolveLocation(manualLoc, allowIp);
     geo = res.geo;
     // Only cache a genuine lookup — never the hardcoded default, or it would
     // pin the weather to that default for the whole TTL after a transient miss.
     if (res.resolved) {
       try {
-        localStorage.setItem(GEO_KEY, JSON.stringify({ ts: Date.now(), q: manualLoc, geo }));
+        localStorage.setItem(GEO_KEY, JSON.stringify({ ts: Date.now(), q: manualLoc, allowIp, geo }));
       } catch {
         /* ignore */
       }

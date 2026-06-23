@@ -7,13 +7,17 @@ import {
   faviconUrls,
   fetchNews,
   fetchWeather,
+  getLocPerm,
   NEWS_CATEGORIES,
+  setLocPerm,
   topSites,
   type IconBucket,
+  type LocPerm,
   type NewsCategory,
   type NewsItem,
   type Weather,
 } from "./newtabData";
+import { LocationPermission } from "./LocationPermission";
 
 // The built-in New Tab / blank page (from the "Blank Page" design): clock,
 // greeting, engine-aware search, frequently-used sites with favicons, live
@@ -174,6 +178,11 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
 
   const [weather, setWeather] = useState<Weather | null>(() => cachedWeather(weatherLocation, tempUnit));
   const [weatherErr, setWeatherErr] = useState(false);
+  // Location consent for auto weather ("session" is allow-once, not persisted).
+  const [perm, setPerm] = useState<LocPerm | "session" | null>(() => getLocPerm());
+  const autoLocation = !weatherLocation.trim();
+  const askLocation = autoLocation && perm === null;
+  const allowIp = !autoLocation || perm === "allow" || perm === "session";
 
   const [newsByCat, setNewsByCat] = useState<Record<string, NewsItem[]>>(() => {
     const init: Record<string, NewsItem[]> = {};
@@ -196,8 +205,10 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
     return () => clearInterval(t);
   }, []);
 
-  // Weather: use a fresh cache as-is (no network); otherwise fetch and refresh.
+  // Weather: wait for location consent (auto mode), then use a fresh cache as-is
+  // or fetch and refresh.
   useEffect(() => {
+    if (askLocation) return; // waiting on the consent dialog
     let alive = true;
     setWeatherErr(false);
     const fresh = cachedWeather(weatherLocation, tempUnit);
@@ -205,7 +216,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
       setWeather(fresh);
       return;
     }
-    fetchWeather(weatherLocation, tempUnit)
+    fetchWeather(weatherLocation, tempUnit, allowIp)
       .then((w) => {
         if (alive) setWeather(w);
       })
@@ -218,7 +229,13 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
     return () => {
       alive = false;
     };
-  }, [tempUnit, weatherLocation]);
+  }, [tempUnit, weatherLocation, askLocation, allowIp]);
+
+  const decideLocation = (d: "allow" | "session" | "block") => {
+    if (d === "allow") setLocPerm("allow");
+    if (d === "block") setLocPerm("block");
+    setPerm(d === "allow" ? "allow" : d === "block" ? "block" : "session");
+  };
 
   // News: use a fresh cache as-is; otherwise fetch the feed via the proxy.
   useEffect(() => {
@@ -287,6 +304,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
         fontFamily: "'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif",
       }}
     >
+      {askLocation && <LocationPermission onDecide={decideLocation} />}
       <div
         style={{
           minHeight: "100%",
