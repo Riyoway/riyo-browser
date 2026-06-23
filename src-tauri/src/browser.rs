@@ -38,8 +38,10 @@ const NEWTAB_HOST: &str = "newtab.local";
 /// and the autofill / translate / optimization-hint services. We must re-list
 /// wry's own defaults (`msWebOOUI,msPdfOOUI,msSmartScreenProtection`) because
 /// supplying custom args replaces them — dropping them would silently turn
-/// SmartScreen URL reporting back on. Windows-only; a no-op elsewhere.
-const BROWSER_ARGS: &str = "--disable-background-networking --disable-component-update --disable-domain-reliability --disable-sync --no-pings --disable-breakpad --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,OptimizationHints,OptimizationTargetPrediction,Translate,AutofillServerCommunication,InterestFeedContentSuggestions";
+/// SmartScreen URL reporting back on. `--disable-backgrounding-occluded-windows`
+/// keeps tabs (and their audio) running when the window is minimized to the tray
+/// for background playback. Windows-only; a no-op elsewhere.
+const BROWSER_ARGS: &str = "--disable-background-networking --disable-component-update --disable-domain-reliability --disable-sync --no-pings --disable-breakpad --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,OptimizationHints,OptimizationTargetPrediction,Translate,AutofillServerCommunication,InterestFeedContentSuggestions";
 
 fn label_of(id: &str) -> String {
     format!("{PREFIX}{id}")

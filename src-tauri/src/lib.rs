@@ -27,12 +27,14 @@ pub fn run() {
                 let app = window.app_handle();
                 if window.label() == "main" {
                     if !app.state::<QuitFlag>().0.load(Ordering::SeqCst) {
-                        // Hide to tray instead of quitting. Tear down the tab
-                        // webviews first — child webviews left on a hidden window
-                        // can block the re-show (see browser::close_all_tabs).
+                        // Minimize to the tray instead of quitting. We deliberately
+                        // do NOT hide() or tear the tabs down: keeping the webviews
+                        // alive lets media keep playing in the background, and
+                        // minimizing (vs hiding) avoids the hidden-child-webview
+                        // re-show bug (tauri#9798). skip_taskbar hides the button.
                         api.prevent_close();
-                        browser::close_all_tabs(window);
-                        let _ = window.hide();
+                        let _ = window.minimize();
+                        let _ = window.set_skip_taskbar(true);
                     }
                 } else {
                     // Secondary window: tear down its tabs, then let it close.
@@ -111,10 +113,11 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_skip_taskbar(false);
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
-        // Tabs were torn down on hide; let the browser UI recreate the active one.
+        // Tabs stayed alive in the tray; just reposition the active webview.
         let _ = app.emit("main-shown", ());
     }
 }
