@@ -14,6 +14,25 @@ html {
   background-color: #000000;
 }
 
+/* No focus/active outline ring on buttons (the box left after a click/hover on
+   toolbar, tab, and window controls). Form fields keep their focus styling. */
+button:focus,
+button:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* No focus ring/outline on the address bar. The white frame on click is the
+   focus outline on the inner <input>, so target the wrapper AND its children
+   (the flat field doesn't otherwise use an outline or box-shadow). */
+.address-input,
+.address-input * {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
 /* Hide the horizontal scrollbar on the tab strip while keeping it scrollable. */
 .no-scrollbar {
   scrollbar-width: none;

@@ -353,7 +353,7 @@ export function App() {
         <Input
           ref={addrRef}
           className="flex-1"
-          classNames={{ inputWrapper: "h-9" }}
+          classNames={{ inputWrapper: "h-9 address-input" }}
           radius="full"
           size="sm"
           variant="flat"
