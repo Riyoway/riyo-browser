@@ -58,6 +58,27 @@ button:focus-visible,
   background: rgba(99, 102, 241, 0.4);
 }
 
+/* New Tab page: the wallpaper otherwise shows straight through the transparent
+   track. Give it a consistent dark gutter (matching the page scrim) and a clear
+   light thumb so the scrollbar reads as part of the UI. */
+.ntp::-webkit-scrollbar {
+  width: 12px;
+}
+.ntp::-webkit-scrollbar-track,
+.ntp::-webkit-scrollbar-corner {
+  background: rgba(10, 10, 10, 0.6);
+}
+.ntp::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.ntp::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+  background-clip: content-box;
+}
+
 .ntp input::placeholder {
   color: #5a5a5a;
 }

@@ -288,7 +288,16 @@ export function NewTabPage({
   const ampm = hh < 12 ? "AM" : "PM";
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
   const time = `${h12}:${mm}`;
-  const greeting = hh < 12 ? "Good morning" : hh < 18 ? "Good afternoon" : "Good evening";
+  const greeting =
+    hh < 5
+      ? "Good night"
+      : hh < 12
+        ? "Good morning"
+        : hh < 18
+          ? "Good afternoon"
+          : hh < 22
+            ? "Good evening"
+            : "Good night";
   const dateStr = `${DAYS[now.getDay()]}, ${MONTHS[now.getMonth()]} ${now.getDate()}`;
   const monthLabel = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
   const engineLabel = SEARCH_ENGINE_LABEL[searchEngine];
@@ -312,26 +321,25 @@ export function NewTabPage({
   };
 
   const bgUrl = backgroundUrl(background);
+  // Bake the readability scrim into the background as a gradient layer (not a
+  // separate scrolling element), so image + scrim stay attached to the page and
+  // cover it seamlessly at any size/scroll position.
+  const scrim = "linear-gradient(rgba(10,10,10,0.55),rgba(10,10,10,0.55))";
 
   return (
     <div
       className="ntp anim-fade absolute inset-0 z-40 overflow-auto"
       style={{
         background: bgUrl ? undefined : "#0a0a0a",
-        backgroundImage: bgUrl ? `url(${bgUrl})` : undefined,
+        backgroundImage: bgUrl ? `${scrim}, url(${bgUrl})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
+        backgroundAttachment: "scroll",
         color: "#ededed",
         fontFamily: "'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif",
       }}
     >
-      {/* Scrim over an image background so the content stays readable. */}
-      {bgUrl && (
-        <div
-          style={{ position: "absolute", inset: 0, background: "rgba(10,10,10,0.55)", zIndex: 0, pointerEvents: "none" }}
-        />
-      )}
       {askLocation && <LocationPermission onDecide={decideLocation} />}
       <div
         style={{
