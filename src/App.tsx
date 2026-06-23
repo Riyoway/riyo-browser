@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Input } from "@heroui/react";
 import {
+  AppWindow,
   ArrowRight,
   Bookmark as BookmarkIcon,
   ChevronLeft,
@@ -210,6 +211,7 @@ export function App() {
       events.onShortcut((s) => {
         if (s.cmd === "newtab") addTab();
         else if (s.cmd === "closetab") closeTab(s.id);
+        else if (s.cmd === "newwindow") win.newWindow().catch(() => {});
         else if (s.cmd === "settings") setView((v) => (v === "settings" ? "web" : "settings"));
         else if (s.cmd === "focusurl") {
           setView("web");
@@ -372,6 +374,9 @@ export function App() {
       } else if (ctrl && k === ",") {
         e.preventDefault();
         setView((v) => (v === "settings" ? "web" : "settings"));
+      } else if (ctrl && k === "n" && !e.shiftKey) {
+        e.preventDefault();
+        win.newWindow().catch(() => {});
       } else if (e.altKey && k === "arrowleft") {
         e.preventDefault();
         evalActive("back");
@@ -530,6 +535,16 @@ export function App() {
 
         <div className="mx-0.5 h-6 w-px shrink-0 bg-divider" />
 
+        <Button
+          isIconOnly
+          variant="light"
+          size="sm"
+          title="New window (Ctrl+N)"
+          aria-label="New window"
+          onPress={() => win.newWindow().catch(() => {})}
+        >
+          <AppWindow size={17} />
+        </Button>
         <Button isIconOnly variant="light" size="sm" title="Bookmarks" aria-label="Bookmarks" onPress={() => openPanel("bookmarks")}>
           <BookmarkIcon size={17} />
         </Button>

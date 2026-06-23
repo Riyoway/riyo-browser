@@ -17,10 +17,12 @@
 //!     tab" is done by navigating to a sentinel url that `on_navigation` cancels and
 //!     forwards to the frontend.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use serde::Serialize;
 use tauri::{
     webview::{DownloadEvent, WebviewBuilder},
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 const PREFIX: &str = "browser-tab-";
@@ -94,6 +96,7 @@ const TAB_JS: &str = r#"
       else if (ctrl && k === 'w') cmd = 'closetab';
       else if (ctrl && k === 'l') cmd = 'focusurl';
       else if (ctrl && k === ',') cmd = 'settings';
+      else if (ctrl && k === 'n' && !e.shiftKey) cmd = 'newwindow';
       if (cmd) { e.preventDefault(); e.stopPropagation(); sig('cmd=' + cmd); }
     }, true);
   } catch (e) {}
@@ -110,7 +113,7 @@ fn park(wv: &tauri::Webview) {
 /// frontend knows to navigate it to the tab's url.
 #[tauri::command]
 pub async fn browser_tab_show(
-    app: AppHandle,
+    window: tauri::Window,
     id: String,
     x: f64,
     y: f64,
@@ -120,9 +123,12 @@ pub async fn browser_tab_show(
     let w = width.max(1.0);
     let h = height.max(1.0);
     let label = label_of(&id);
+    let app = window.app_handle();
+    let win_label = window.label().to_string();
 
+    // Park this window's other tabs only — never another window's.
     for (lbl, wv) in app.webviews() {
-        if lbl.starts_with(PREFIX) && lbl != label {
+        if lbl.starts_with(PREFIX) && lbl != label && wv.window().label() == win_label {
             park(&wv);
         }
     }
@@ -133,10 +139,10 @@ pub async fn browser_tab_show(
         return Ok(false);
     }
 
-    let window = app.get_window("main").ok_or_else(|| "main window not found".to_string())?;
     let blank: tauri::Url = "about:blank".parse().unwrap();
     let app2 = app.clone();
     let id2 = id.clone();
+    let target = win_label.clone();
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(blank))
         .initialization_script(TAB_JS)
         .additional_browser_args(BROWSER_ARGS)
@@ -154,23 +160,25 @@ pub async fn browser_tab_show(
             true
         })
         .on_navigation(move |u| {
+            // Events go only to this tab's owning window, so a second window
+            // doesn't react to the first window's pages.
             if u.host_str() == Some(NEWTAB_HOST) {
                 if let Some((_, val)) = u.query_pairs().find(|(k, _)| k == "u") {
-                    let _ = app2.emit("browser-new-tab", val.to_string());
+                    let _ = app2.emit_to(&target, "browser-new-tab", val.to_string());
                 } else if let Some((_, cmd)) = u.query_pairs().find(|(k, _)| k == "cmd") {
                     let cmd = cmd.to_string();
                     // These actions target the host chrome, so move OS keyboard
-                    // focus back from the page webview to the main (React) webview.
+                    // focus back from the page webview to this window's React webview.
                     if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
-                        if let Some(w) = app2.get_webview_window("main") {
+                        if let Some(w) = app2.get_webview_window(&target) {
                             let _ = w.set_focus();
                         }
                     }
-                    let _ = app2.emit("browser-shortcut", ShortcutPayload { id: id2.clone(), cmd });
+                    let _ = app2.emit_to(&target, "browser-shortcut", ShortcutPayload { id: id2.clone(), cmd });
                 }
                 return false; // cancel — keep the current page
             }
-            let _ = app2.emit("browser-nav", NavPayload { id: id2.clone(), url: u.to_string() });
+            let _ = app2.emit_to(&target, "browser-nav", NavPayload { id: id2.clone(), url: u.to_string() });
             true
         });
     window
@@ -208,25 +216,55 @@ pub async fn browser_tab_eval(app: AppHandle, id: String, action: String) {
     }
 }
 
-/// Park every tab off-screen (e.g. when the browser UI is not visible) while
-/// keeping the webviews — and their state — alive.
+/// Park this window's tabs off-screen (e.g. when the browser UI is not visible)
+/// while keeping the webviews — and their state — alive.
 #[tauri::command]
-pub async fn browser_hide_all(app: AppHandle) {
+pub async fn browser_hide_all(window: tauri::Window) {
+    let app = window.app_handle();
+    let win_label = window.label();
     for (lbl, wv) in app.webviews() {
-        if lbl.starts_with(PREFIX) {
+        if lbl.starts_with(PREFIX) && wv.window().label() == win_label {
             park(&wv);
         }
     }
 }
 
-/// Destroy every tab webview. Call this before hiding the window to the tray: a
-/// long-lived child webview on a hidden window can stop the window from re-showing
-/// and spams "Failed to unregister class Chrome_WidgetWin_0" (tauri#9798). Tabs are
-/// recreated from the persisted list when the window comes back.
-pub fn close_all_tabs(app: &AppHandle) {
+/// Destroy a window's tab webviews. Call this before hiding the (main) window to
+/// the tray, or when a secondary window closes: a long-lived child webview on a
+/// hidden window can stop it re-showing and spams "Failed to unregister class
+/// Chrome_WidgetWin_0" (tauri#9798). Tabs are recreated from the persisted list
+/// when the window comes back.
+pub fn close_all_tabs(window: &tauri::Window) {
+    let app = window.app_handle();
+    let win_label = window.label();
     for (lbl, wv) in app.webviews() {
-        if lbl.starts_with(PREFIX) {
+        if lbl.starts_with(PREFIX) && wv.window().label() == win_label {
             let _ = wv.close();
         }
     }
+}
+
+/// Monotonic counter for unique secondary-window labels.
+pub struct WindowSeq(pub AtomicUsize);
+
+impl WindowSeq {
+    pub fn new() -> Self {
+        WindowSeq(AtomicUsize::new(1))
+    }
+}
+
+/// Open a fresh browser window (its own tabs, independent of this one).
+#[tauri::command]
+pub fn new_window(app: AppHandle) -> Result<(), String> {
+    let n = app.state::<WindowSeq>().0.fetch_add(1, Ordering::SeqCst);
+    let label = format!("w{n}");
+    WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
+        .title("riyo-browser")
+        .inner_size(1200.0, 820.0)
+        .min_inner_size(640.0, 480.0)
+        .decorations(false)
+        .additional_browser_args(BROWSER_ARGS)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }

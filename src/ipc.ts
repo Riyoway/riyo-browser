@@ -14,6 +14,8 @@ export const win = {
   // Routes through the CloseRequested handler, which hides to the tray.
   close: () => appWindow.close(),
   setAlwaysOnTop: (v: boolean) => appWindow.setAlwaysOnTop(v),
+  /** Open a fresh browser window with its own tabs. */
+  newWindow: () => invoke<void>("new_window"),
 };
 
 export const api = {

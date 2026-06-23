@@ -12,10 +12,22 @@ export interface TabState {
   activeId: string;
 }
 
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
 // Internal URL for the New Tab / blank page. Tabs with this url have no native
 // webview; the React `NewTabPage` overlay is shown instead (see App.tsx).
 export const NEWTAB = "about:newtab";
-const KEY = "tauri-browser.tabs";
+
+// Tabs are per-window. The main window keeps the original key (backward compat);
+// each secondary window gets its own namespaced key so its tab list is separate.
+const WIN_LABEL = (() => {
+  try {
+    return getCurrentWindow().label;
+  } catch {
+    return "main";
+  }
+})();
+const KEY = WIN_LABEL === "main" ? "tauri-browser.tabs" : `tauri-browser.tabs.${WIN_LABEL}`;
 
 export const newId = () => "t" + Math.random().toString(36).slice(2, 10);
 

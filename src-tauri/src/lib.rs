@@ -14,23 +14,26 @@ pub fn run() {
     tauri::Builder::default()
         .manage(QuitFlag(AtomicBool::new(false)))
         .manage(downloads::Downloads::new())
+        .manage(browser::WindowSeq::new())
         .setup(|app| {
             setup_tray(app.handle())?;
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() != "main" {
-                return;
-            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
-                if !app.state::<QuitFlag>().0.load(Ordering::SeqCst) {
-                    // Hide to tray instead of quitting. Tear down the tab webviews
-                    // first — child webviews left on a hidden window can block the
-                    // re-show (see browser::close_all_tabs).
-                    api.prevent_close();
-                    browser::close_all_tabs(app);
-                    let _ = window.hide();
+                if window.label() == "main" {
+                    if !app.state::<QuitFlag>().0.load(Ordering::SeqCst) {
+                        // Hide to tray instead of quitting. Tear down the tab
+                        // webviews first — child webviews left on a hidden window
+                        // can block the re-show (see browser::close_all_tabs).
+                        api.prevent_close();
+                        browser::close_all_tabs(window);
+                        let _ = window.hide();
+                    }
+                } else {
+                    // Secondary window: tear down its tabs, then let it close.
+                    browser::close_all_tabs(window);
                 }
             }
         })
@@ -40,6 +43,7 @@ pub fn run() {
             browser::browser_tab_close,
             browser::browser_tab_eval,
             browser::browser_hide_all,
+            browser::new_window,
             net::http_get_text,
             downloads::download_enqueue,
             downloads::download_list,
