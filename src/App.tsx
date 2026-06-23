@@ -440,7 +440,12 @@ export function App() {
       <div className="relative min-h-0 flex-1">
         <div className="absolute inset-0 bg-content1" ref={holderRef} />
         {view === "web" && activeTab?.url === NEWTAB && (
-          <NewTabPage searchEngine={settings.searchEngine} onNavigate={navTo} />
+          <NewTabPage
+            searchEngine={settings.searchEngine}
+            tempUnit={settings.tempUnit}
+            weatherLocation={settings.weatherLocation}
+            onNavigate={navTo}
+          />
         )}
         {view === "settings" && (
           <SettingsPanel

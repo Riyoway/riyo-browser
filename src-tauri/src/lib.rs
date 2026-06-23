@@ -1,4 +1,5 @@
 mod browser;
+mod net;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager, WindowEvent};
@@ -37,6 +38,7 @@ pub fn run() {
             browser::browser_tab_close,
             browser::browser_tab_eval,
             browser::browser_hide_all,
+            net::http_get_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri-browser");

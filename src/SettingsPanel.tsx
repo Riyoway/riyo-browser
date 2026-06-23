@@ -7,6 +7,7 @@ import {
   SEARCH_ENGINE_LABEL,
   type SearchEngine,
   type Settings,
+  type TempUnit,
 } from "./settings";
 
 const ENGINES: SearchEngine[] = ["google", "bing", "duckduckgo"];
@@ -109,13 +110,43 @@ export function SettingsPanel({
           </Row>
         </Section>
 
+        <Section title="New Tab page">
+          <Row label="Temperature unit">
+            <Select
+              aria-label="Temperature unit"
+              className="w-44"
+              size="sm"
+              variant="bordered"
+              selectedKeys={[settings.tempUnit]}
+              disallowEmptySelection
+              onSelectionChange={(keys) => {
+                const v = Array.from(keys)[0] as TempUnit | undefined;
+                if (v) onChange({ ...settings, tempUnit: v });
+              }}
+            >
+              <SelectItem key="celsius">Celsius (°C)</SelectItem>
+              <SelectItem key="fahrenheit">Fahrenheit (°F)</SelectItem>
+            </Select>
+          </Row>
+          <Input
+            label="Weather location"
+            description="Leave blank to use your current location."
+            placeholder="Auto (current location)"
+            value={settings.weatherLocation}
+            onValueChange={(v) => onChange({ ...settings, weatherLocation: v })}
+            variant="bordered"
+          />
+        </Section>
+
         <Section title="Privacy & data">
           <div className="flex items-start gap-3 rounded-large border border-divider bg-content1 p-4">
             <ShieldCheck size={20} className="mt-0.5 shrink-0 text-success" />
             <div className="text-sm text-foreground-600">
               The engine's background &ldquo;phone-home&rdquo; traffic is disabled: SmartScreen
               URL reporting, component/variations updates, Domain Reliability, crash uploads, and
-              the autofill/translate services. Pages you visit still reach their own servers.
+              the autofill/translate services. Pages you visit still reach their own servers. The
+              New Tab page also fetches weather (Open-Meteo, with your location via the browser or
+              ipapi.co), news (BBC), and site icons (DuckDuckGo) from those third parties.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">

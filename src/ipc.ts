@@ -24,6 +24,8 @@ export const api = {
   tabClose: (id: string) => invoke<void>("browser_tab_close", { id }),
   tabEval: (id: string, action: TabAction) => invoke<void>("browser_tab_eval", { id, action }),
   hideAll: () => invoke<void>("browser_hide_all"),
+  /** Backend HTTPS GET (bypasses webview CORS) — used by the New Tab page for RSS. */
+  httpGetText: (url: string) => invoke<string>("http_get_text", { url }),
 };
 
 export const events = {

@@ -5,12 +5,17 @@ import { NEWTAB } from "./tabs";
 
 export type SearchEngine = "google" | "bing" | "duckduckgo";
 export type Theme = "dark" | "light";
+export type TempUnit = "celsius" | "fahrenheit";
 
 export interface Settings {
   homepage: string;
   searchEngine: SearchEngine;
   openNewTabToHomepage: boolean;
   theme: Theme;
+  /** New Tab page weather units. */
+  tempUnit: TempUnit;
+  /** New Tab page weather location; empty = auto-detect (geolocation / IP). */
+  weatherLocation: string;
 }
 
 const KEY = "tauri-browser.settings";
@@ -18,11 +23,24 @@ const KEY = "tauri-browser.settings";
 // Default home is the built-in New Tab / blank page.
 export const DEFAULT_HOMEPAGE = NEWTAB;
 
+// The US (and a couple of territories) use Fahrenheit; default everyone else to
+// Celsius based on the UI language.
+function defaultTempUnit(): TempUnit {
+  try {
+    const lang = (navigator.language || "").toLowerCase();
+    return lang === "en-us" || lang.endsWith("-us") ? "fahrenheit" : "celsius";
+  } catch {
+    return "celsius";
+  }
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   homepage: DEFAULT_HOMEPAGE,
   searchEngine: "google",
   openNewTabToHomepage: true,
   theme: "dark",
+  tempUnit: defaultTempUnit(),
+  weatherLocation: "",
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {
