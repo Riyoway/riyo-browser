@@ -49,3 +49,15 @@ export function clearHistory(): HistoryEntry[] {
   save([]);
   return [];
 }
+
+/** Stable identity for an entry (url can repeat across time, so include ts). */
+export function entryKey(e: HistoryEntry): string {
+  return `${e.ts}:${e.url}`;
+}
+
+/** Remove the entries whose keys are in `keys`. */
+export function removeHistoryKeys(keys: Set<string>): HistoryEntry[] {
+  const list = loadHistory().filter((e) => !keys.has(entryKey(e)));
+  save(list);
+  return list;
+}

@@ -30,7 +30,7 @@ import {
 import { loadTabs, NEWTAB, newId, persistTabs, titleOf, type Tab, type TabState } from "./tabs";
 import { NewTabPage } from "./NewTabPage";
 import { loadSettings, saveSettings, toUrl, type Settings } from "./settings";
-import { clearHistory, loadHistory, pushHistory, type HistoryEntry } from "./history";
+import { clearHistory, loadHistory, pushHistory, removeHistoryKeys, type HistoryEntry } from "./history";
 import {
   clearBookmarks,
   isBookmarked,
@@ -334,6 +334,8 @@ export function App() {
     setBookmarks(clearBookmarks());
   }, []);
 
+  const openUrlsInNewTabs = useCallback((urls: string[]) => urls.forEach((u) => addTab(u)), [addTab]);
+
   // Persist the queue's batch limit and push it to the backend.
   const setMaxDownloads = useCallback((n: number) => {
     const clamped = Math.max(1, Math.min(10, Math.round(n)));
@@ -586,6 +588,8 @@ export function App() {
           <HistoryPanel
             entries={history}
             onOpen={openInActiveTab}
+            onOpenNewTabs={openUrlsInNewTabs}
+            onDelete={(keys) => setHistory(removeHistoryKeys(new Set(keys)))}
             onClear={() => setHistory(clearHistory())}
             onClose={() => setView("web")}
           />
