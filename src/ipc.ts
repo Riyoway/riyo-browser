@@ -28,6 +28,46 @@ export const api = {
   httpGetText: (url: string) => invoke<string>("http_get_text", { url }),
 };
 
+// ---- downloads (queue-managed; see src-tauri/src/downloads.rs) ----
+export type DownloadStatus = "queued" | "active" | "paused" | "completed" | "failed" | "canceled";
+export interface DownloadItem {
+  id: string;
+  url: string;
+  filename: string;
+  path: string;
+  status: DownloadStatus;
+  received: number;
+  total: number;
+  error: string;
+}
+
+export const downloads = {
+  list: () => invoke<DownloadItem[]>("download_list"),
+  enqueue: (url: string, filename?: string) =>
+    invoke<string>("download_enqueue", { url, filename: filename ?? null }),
+  maxConcurrent: () => invoke<number>("download_max_concurrent"),
+  setMaxConcurrent: (n: number) => invoke<void>("download_set_max_concurrent", { n }),
+  pause: (id: string) => invoke<void>("download_pause", { id }),
+  resume: (id: string) => invoke<void>("download_resume", { id }),
+  retry: (id: string) => invoke<void>("download_retry", { id }),
+  cancel: (id: string) => invoke<void>("download_cancel", { id }),
+  remove: (id: string) => invoke<void>("download_remove", { id }),
+  clearFinished: () => invoke<void>("download_clear_finished"),
+  open: (id: string) => invoke<void>("download_open", { id }),
+  openFolder: (id: string) => invoke<void>("download_open_folder", { id }),
+};
+
+export const downloadEvents = {
+  /** Full list snapshot whenever an item is added / changes status. */
+  onChanged: (cb: (items: DownloadItem[]) => void): Promise<UnlistenFn> =>
+    listen<DownloadItem[]>("downloads-changed", (e) => cb(e.payload)),
+  /** Frequent byte-progress for the active downloads. */
+  onProgress: (
+    cb: (p: { id: string; received: number; total: number }) => void
+  ): Promise<UnlistenFn> =>
+    listen<{ id: string; received: number; total: number }>("downloads-progress", (e) => cb(e.payload)),
+};
+
 export const events = {
   /** A tab navigated (also fires for in-page redirects). */
   onNav: (cb: (e: { id: string; url: string }) => void): Promise<UnlistenFn> =>

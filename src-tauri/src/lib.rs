@@ -1,4 +1,5 @@
 mod browser;
+mod downloads;
 mod net;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +13,7 @@ struct QuitFlag(AtomicBool);
 pub fn run() {
     tauri::Builder::default()
         .manage(QuitFlag(AtomicBool::new(false)))
+        .manage(downloads::Downloads::new())
         .setup(|app| {
             setup_tray(app.handle())?;
             Ok(())
@@ -39,6 +41,18 @@ pub fn run() {
             browser::browser_tab_eval,
             browser::browser_hide_all,
             net::http_get_text,
+            downloads::download_enqueue,
+            downloads::download_list,
+            downloads::download_max_concurrent,
+            downloads::download_set_max_concurrent,
+            downloads::download_pause,
+            downloads::download_resume,
+            downloads::download_retry,
+            downloads::download_cancel,
+            downloads::download_remove,
+            downloads::download_clear_finished,
+            downloads::download_open,
+            downloads::download_open_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri-browser");

@@ -8,7 +8,9 @@ a HeroUI interface, and a hardened, low-telemetry engine configuration.
 - **Real tabs** — each tab is its own native webview, so page state survives switching, and the tab list persists across restarts
 - **Custom title bar** — native decorations off; integrated tabs, drag region, and window controls
 - **Smart address bar** — detects URLs vs. search queries (Google / Bing / DuckDuckGo)
+- **New Tab page** — live clock, engine-aware search, frequently-used sites, current-location weather, and news with thumbnails
 - **History, bookmarks, and a settings page** (homepage, search engine, theme, clear data)
+- **Download manager** — page downloads are intercepted into a queue with a configurable batch limit (how many run at once), plus pause / resume / cancel / retry and live progress
 - **Hardened engine** — background "phone-home" traffic (SmartScreen, component/variations updates, Domain Reliability, crash & autofill telemetry) is disabled
 - **Keyboard shortcuts** — `Ctrl+T` / `Ctrl+W` / `Ctrl+L` / `Ctrl+R`, `Alt+←/→`, `Ctrl+,`
 

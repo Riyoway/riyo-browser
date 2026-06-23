@@ -16,6 +16,8 @@ export interface Settings {
   tempUnit: TempUnit;
   /** New Tab page weather location; empty = auto-detect (geolocation / IP). */
   weatherLocation: string;
+  /** Max downloads running at once (the queue's batch limit), 1–10. */
+  maxConcurrentDownloads: number;
 }
 
 const KEY = "tauri-browser.settings";
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "dark",
   tempUnit: defaultTempUnit(),
   weatherLocation: "",
+  maxConcurrentDownloads: 3,
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {

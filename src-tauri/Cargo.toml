@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["unstable", "tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "fs", "io-util"] }
 # HTTPS proxy for the New Tab page's data (RSS news etc.) which CORS blocks in
 # the webview. gzip/brotli so compressed feeds are auto-decompressed.
 reqwest = { version = "0.12", features = ["gzip", "brotli"] }

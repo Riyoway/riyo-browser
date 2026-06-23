@@ -19,7 +19,8 @@
 
 use serde::Serialize;
 use tauri::{
-    webview::WebviewBuilder, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl,
+    webview::{DownloadEvent, WebviewBuilder},
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl,
 };
 
 const PREFIX: &str = "browser-tab-";
@@ -110,6 +111,19 @@ pub async fn browser_tab_show(
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(blank))
         .initialization_script(TAB_JS)
         .additional_browser_args(BROWSER_ARGS)
+        // Intercept downloads: cancel the engine's immediate native download and
+        // route http(s) files into our queue instead (browser-style blob:/data:
+        // downloads fall through to the engine).
+        .on_download(|webview, event| {
+            if let DownloadEvent::Requested { url, destination } = event {
+                if matches!(url.scheme(), "http" | "https") {
+                    let suggested = destination.file_name().map(|n| n.to_string_lossy().to_string());
+                    let _ = crate::downloads::enqueue(webview.app_handle(), url.to_string(), suggested);
+                    return false;
+                }
+            }
+            true
+        })
         .on_navigation(move |u| {
             if u.host_str() == Some(NEWTAB_HOST) {
                 if let Some((_, val)) = u.query_pairs().find(|(k, _)| k == "u") {

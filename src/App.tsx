@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Input } from "@heroui/react";
+import { Badge, Button, Input } from "@heroui/react";
 import {
   ArrowRight,
   Bookmark as BookmarkIcon,
   ChevronLeft,
   ChevronRight,
+  Download,
   History as HistoryIcon,
   Home,
   Minus,
@@ -16,7 +17,15 @@ import {
   Star,
   X,
 } from "lucide-react";
-import { api, events, win, type TabAction } from "./ipc";
+import {
+  api,
+  downloadEvents,
+  downloads,
+  events,
+  win,
+  type DownloadItem,
+  type TabAction,
+} from "./ipc";
 import { loadTabs, NEWTAB, newId, persistTabs, titleOf, type Tab, type TabState } from "./tabs";
 import { NewTabPage } from "./NewTabPage";
 import { loadSettings, saveSettings, toUrl, type Settings } from "./settings";
@@ -32,8 +41,9 @@ import {
 import { SettingsPanel } from "./SettingsPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { BookmarksPanel } from "./BookmarksPanel";
+import { DownloadsPanel } from "./DownloadsPanel";
 
-type View = "web" | "settings" | "history" | "bookmarks";
+type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
 export function App() {
   const [{ tabs, activeId }, setState] = useState<TabState>(loadTabs);
@@ -41,6 +51,7 @@ export function App() {
   const [view, setView] = useState<View>("web");
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [dlItems, setDlItems] = useState<DownloadItem[]>([]);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
   const stateRef = useRef<TabState>({ tabs, activeId });
@@ -183,6 +194,29 @@ export function App() {
     };
   }, [addTab, setTabUrl, sync]);
 
+  // Download manager: seed the list, push the persisted batch limit, and keep
+  // the list live from the backend (full snapshot on change + byte progress).
+  useEffect(() => {
+    let disposed = false;
+    const uns: Array<() => void> = [];
+    const track = (p: Promise<() => void>) =>
+      p.then((f) => (disposed ? f() : uns.push(f))).catch(() => {});
+    downloads.list().then(setDlItems).catch(() => {});
+    downloads.setMaxConcurrent(settingsRef.current.maxConcurrentDownloads).catch(() => {});
+    track(downloadEvents.onChanged((items) => setDlItems(items)));
+    track(
+      downloadEvents.onProgress((p) =>
+        setDlItems((prev) =>
+          prev.map((it) => (it.id === p.id ? { ...it, received: p.received, total: p.total } : it))
+        )
+      )
+    );
+    return () => {
+      disposed = true;
+      uns.forEach((f) => f());
+    };
+  }, []);
+
   // ---- handlers ----
   const evalActive = useCallback((action: TabAction) => {
     setView("web");
@@ -265,6 +299,17 @@ export function App() {
     setHistory(clearHistory());
     setBookmarks(clearBookmarks());
   }, []);
+
+  // Persist the queue's batch limit and push it to the backend.
+  const setMaxDownloads = useCallback((n: number) => {
+    const clamped = Math.max(1, Math.min(10, Math.round(n)));
+    setSettings((s) => saveSettings({ ...s, maxConcurrentDownloads: clamped }));
+    downloads.setMaxConcurrent(clamped).catch(() => {});
+  }, []);
+
+  const activeDownloads = dlItems.filter(
+    (d) => d.status === "active" || d.status === "paused" || d.status === "queued"
+  ).length;
 
   // ---- keyboard shortcuts ----
   useEffect(() => {
@@ -440,6 +485,17 @@ export function App() {
         <Button isIconOnly variant="light" size="sm" title="History" aria-label="History" onPress={() => openPanel("history")}>
           <HistoryIcon size={17} />
         </Button>
+        <Badge
+          color="primary"
+          size="sm"
+          content={activeDownloads}
+          isInvisible={activeDownloads === 0}
+          placement="top-right"
+        >
+          <Button isIconOnly variant="light" size="sm" title="Downloads" aria-label="Downloads" onPress={() => setView("downloads")}>
+            <Download size={17} />
+          </Button>
+        </Badge>
         <Button isIconOnly variant="light" size="sm" title="Settings" aria-label="Settings" onPress={() => openPanel("settings")}>
           <SettingsIcon size={17} />
         </Button>
@@ -480,6 +536,14 @@ export function App() {
             bookmarks={bookmarks}
             onOpen={openInActiveTab}
             onRemove={(url) => setBookmarks(removeBookmark(url))}
+            onClose={() => setView("web")}
+          />
+        )}
+        {view === "downloads" && (
+          <DownloadsPanel
+            items={dlItems}
+            maxConcurrent={settings.maxConcurrentDownloads}
+            onSetMaxConcurrent={setMaxDownloads}
             onClose={() => setView("web")}
           />
         )}
