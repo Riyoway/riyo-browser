@@ -17,7 +17,9 @@
 //!     tab" is done by navigating to a sentinel url that `on_navigation` cancels and
 //!     forwards to the frontend.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::{
@@ -134,7 +136,7 @@ const TAB_JS: &str = r#"
       var vid = e.target.tagName === 'VIDEO' ? e.target : null;
       var sel = (window.getSelection ? String(window.getSelection()) : '').trim();
       var ed = e.target && (e.target.isContentEditable || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
-      if (a) { rows.push(ctxItem('Open link in new tab', function () { newTab(a.href); })); rows.push(ctxItem('Copy link address', function () { ctxCopy(a.href); })); rows.push(ctxSep()); }
+      if (a) { rows.push(ctxItem('Open link in new tab', function () { newTab(a.href); })); rows.push(ctxItem('Open link in new window', function () { sig('cmd=newwindowurl&q=' + encodeURIComponent(a.href)); })); rows.push(ctxItem('Copy link address', function () { ctxCopy(a.href); })); rows.push(ctxSep()); }
       if (img) { rows.push(ctxItem('Open image in new tab', function () { newTab(img.src); })); rows.push(ctxItem('Copy image address', function () { ctxCopy(img.src); })); rows.push(ctxSep()); }
       if (vid && document.pictureInPictureEnabled && vid.requestPictureInPicture) {
         rows.push(ctxItem(vid.paused ? 'Play' : 'Pause', function () { try { vid.paused ? vid.play() : vid.pause(); } catch (e) {} }));
@@ -182,11 +184,19 @@ const TAB_JS: &str = r#"
       for (var j = 0; j < list.length; j++) { if (list[j].currentTime > 0 && !list[j].ended) return list[j]; }
       return null;
     }
+    var riyoSuppress = 0;
     window.__riyoMedia = function (action) {
       try {
         var el = riyoActiveMedia();
-        if (action === 'playpause') { if (el) { el.paused ? el.play() : el.pause(); } }
-        else if (action === 'pip') {
+        if (action === 'playpause') {
+          if (el) {
+            // The host already updates its UI optimistically; suppress the push
+            // that this play/pause event would trigger so we don't navigate the
+            // page right after a control action (which could disrupt playback).
+            riyoSuppress = Date.now();
+            el.paused ? el.play() : el.pause();
+          }
+        } else if (action === 'pip') {
           var v = el && el.tagName === 'VIDEO' ? el : document.querySelector('video');
           if (v && document.pictureInPictureEnabled && v.requestPictureInPicture) {
             if (document.pictureInPictureElement) document.exitPictureInPicture(); else v.requestPictureInPicture();
@@ -196,6 +206,7 @@ const TAB_JS: &str = r#"
     };
     var riyoLast = '';
     function riyoPushMedia() {
+      if (Date.now() - riyoSuppress < 1000) return;
       try {
         var el = riyoActiveMedia();
         var ms = navigator.mediaSession;
@@ -393,11 +404,28 @@ impl WindowSeq {
     }
 }
 
-/// Open a fresh browser window (its own tabs, independent of this one).
+/// URL a freshly-opened window should load into its first tab (keyed by window
+/// label). The new window's frontend takes it on startup.
+pub struct PendingOpen(pub Mutex<HashMap<String, String>>);
+
+impl PendingOpen {
+    pub fn new() -> Self {
+        PendingOpen(Mutex::new(HashMap::new()))
+    }
+}
+
+/// Open a fresh browser window (its own tabs, independent of this one). If `url`
+/// is given, the new window opens it as its first tab.
+///
+/// Must be `async`: creating a webview from a synchronous command deadlocks the
+/// main thread on Windows (tauri#12032), which froze the new window blank.
 #[tauri::command]
-pub fn new_window(app: AppHandle) -> Result<(), String> {
+pub async fn new_window(app: AppHandle, url: Option<String>) -> Result<(), String> {
     let n = app.state::<WindowSeq>().0.fetch_add(1, Ordering::SeqCst);
     let label = format!("w{n}");
+    if let Some(u) = url.filter(|u| !u.is_empty()) {
+        app.state::<PendingOpen>().0.lock().unwrap().insert(label.clone(), u);
+    }
     WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
         .title("riyo-browser")
         .inner_size(1200.0, 820.0)
@@ -407,4 +435,20 @@ pub fn new_window(app: AppHandle) -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The calling window's pending "open this url" (consumed once, on startup).
+#[tauri::command]
+pub fn take_pending_open(window: tauri::Window) -> Option<String> {
+    app_state_remove(&window)
+}
+
+fn app_state_remove(window: &tauri::Window) -> Option<String> {
+    window
+        .app_handle()
+        .state::<PendingOpen>()
+        .0
+        .lock()
+        .unwrap()
+        .remove(window.label())
 }

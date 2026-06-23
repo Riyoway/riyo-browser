@@ -15,6 +15,7 @@ pub fn run() {
         .manage(QuitFlag(AtomicBool::new(false)))
         .manage(downloads::Downloads::new())
         .manage(browser::WindowSeq::new())
+        .manage(browser::PendingOpen::new())
         .setup(|app| {
             setup_tray(app.handle())?;
             Ok(())
@@ -45,6 +46,7 @@ pub fn run() {
             browser::browser_tab_media,
             browser::browser_hide_all,
             browser::new_window,
+            browser::take_pending_open,
             net::http_get_text,
             downloads::download_enqueue,
             downloads::download_list,

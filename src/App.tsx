@@ -218,6 +218,7 @@ export function App() {
         if (s.cmd === "newtab") addTab();
         else if (s.cmd === "closetab") closeTab(s.id);
         else if (s.cmd === "newwindow") win.newWindow().catch(() => {});
+        else if (s.cmd === "newwindowurl") win.newWindow(s.arg).catch(() => {});
         else if (s.cmd === "search") {
           const u = toUrl(s.arg, settingsRef.current.searchEngine);
           if (u) addTab(u);
@@ -303,6 +304,16 @@ export function App() {
     },
     [addTab]
   );
+
+  // A window opened via "Open link in new window" starts on the given url.
+  useEffect(() => {
+    win
+      .takePendingOpen()
+      .then((u) => {
+        if (u) openInActiveTab(u);
+      })
+      .catch(() => {});
+  }, [openInActiveTab]);
 
   const navTo = useCallback(
     (raw: string) => {
@@ -536,7 +547,10 @@ export function App() {
         {media && media.has && (
           <MediaPlayer
             media={media}
-            onPlayPause={() => api.tabMedia(media.tabId, "playpause").catch(() => {})}
+            onPlayPause={() => {
+              setMedia((m) => (m ? { ...m, playing: !m.playing } : m));
+              api.tabMedia(media.tabId, "playpause").catch(() => {});
+            }}
             onGoToTab={() => activate(media.tabId)}
           />
         )}
