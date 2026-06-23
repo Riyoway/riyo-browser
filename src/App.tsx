@@ -1,20 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Input } from "@heroui/react";
 import {
-  AppWindow,
   ArrowRight,
-  Bookmark as BookmarkIcon,
   ChevronLeft,
   ChevronRight,
   Download,
-  History as HistoryIcon,
+  EllipsisVertical,
   Home,
   Minus,
   Pin,
   Plus,
   RotateCw,
   Search,
-  Settings as SettingsIcon,
   Square,
   Star,
   X,
@@ -47,6 +44,7 @@ import { DownloadsPanel } from "./DownloadsPanel";
 import { DownloadsPopover } from "./DownloadsPopover";
 import { BookmarksBar } from "./BookmarksBar";
 import { MediaPlayer, type MediaState } from "./MediaPlayer";
+import { OverflowMenu } from "./OverflowMenu";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
@@ -58,6 +56,7 @@ export function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [dlItems, setDlItems] = useState<DownloadItem[]>([]);
   const [dlPopover, setDlPopover] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [media, setMedia] = useState<MediaState | null>(null);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
@@ -69,6 +68,8 @@ export function App() {
   settingsRef.current = settings;
   const dlPopoverRef = useRef(false);
   dlPopoverRef.current = dlPopover;
+  const menuOpenRef = useRef(false);
+  menuOpenRef.current = menuOpen;
 
   const holderRef = useRef<HTMLDivElement>(null);
   const addrRef = useRef<HTMLInputElement>(null);
@@ -143,7 +144,7 @@ export function App() {
   // Show the active tab at the placeholder bounds (creating it on about:blank if
   // new, then navigating to its url). Never runs while a panel covers the page.
   const sync = useCallback(() => {
-    if (viewRef.current !== "web" || dlPopoverRef.current) return;
+    if (viewRef.current !== "web" || dlPopoverRef.current || menuOpenRef.current) return;
     const { activeId, tabs } = stateRef.current;
     const active = tabs.find((t) => t.id === activeId);
     // The New Tab / blank page has no native webview — park everything and let
@@ -170,9 +171,9 @@ export function App() {
   // Show the active tab when on the web view; park everything when a panel or the
   // downloads popover is up (so that host-DOM UI isn't hidden by the webview).
   useEffect(() => {
-    if (view === "web" && !dlPopover) sync();
+    if (view === "web" && !dlPopover && !menuOpen) sync();
     else api.hideAll().catch(() => {});
-  }, [view, activeId, sync, dlPopover]);
+  }, [view, activeId, sync, dlPopover, menuOpen]);
 
   // Keep bounds in sync with the layout; park everything when unmounting.
   useEffect(() => {
@@ -356,6 +357,7 @@ export function App() {
     if (v === "history") setHistory(loadHistory());
     if (v === "bookmarks") setBookmarks(loadBookmarks());
     setDlPopover(false);
+    setMenuOpen(false);
     setView(v);
   }, []);
 
@@ -415,7 +417,8 @@ export function App() {
         e.preventDefault();
         evalActive("forward");
       } else if (k === "escape") {
-        if (dlPopoverRef.current) setDlPopover(false);
+        if (menuOpenRef.current) setMenuOpen(false);
+        else if (dlPopoverRef.current) setDlPopover(false);
         else if (viewRef.current !== "web") setView("web");
       }
     };
@@ -589,22 +592,6 @@ export function App() {
 
         <div className="mx-0.5 h-6 w-px shrink-0 bg-divider" />
 
-        <Button
-          isIconOnly
-          variant="light"
-          size="sm"
-          title="New window (Ctrl+N)"
-          aria-label="New window"
-          onPress={() => win.newWindow().catch(() => {})}
-        >
-          <AppWindow size={17} />
-        </Button>
-        <Button isIconOnly variant="light" size="sm" title="Bookmarks" aria-label="Bookmarks" onPress={() => openPanel("bookmarks")}>
-          <BookmarkIcon size={17} />
-        </Button>
-        <Button isIconOnly variant="light" size="sm" title="History" aria-label="History" onPress={() => openPanel("history")}>
-          <HistoryIcon size={17} />
-        </Button>
         <Badge
           color="primary"
           size="sm"
@@ -620,14 +607,26 @@ export function App() {
             aria-label="Downloads"
             onPress={() => {
               setView("web");
+              setMenuOpen(false);
               setDlPopover((o) => !o);
             }}
           >
             <Download size={17} />
           </Button>
         </Badge>
-        <Button isIconOnly variant="light" size="sm" title="Settings" aria-label="Settings" onPress={() => openPanel("settings")}>
-          <SettingsIcon size={17} />
+        <Button
+          isIconOnly
+          variant="light"
+          size="sm"
+          title="Menu"
+          aria-label="Menu"
+          onPress={() => {
+            setView("web");
+            setDlPopover(false);
+            setMenuOpen((o) => !o);
+          }}
+        >
+          <EllipsisVertical size={18} />
         </Button>
       </div>
 
@@ -698,6 +697,30 @@ export function App() {
                   setView("downloads");
                 }}
                 onClose={() => setDlPopover(false)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Overflow (⋮) menu — collected toolbar actions. */}
+        {menuOpen && view === "web" && (
+          <>
+            <div className="anim-fade absolute inset-0 z-40" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-3 top-3 z-50">
+              <OverflowMenu
+                showBookmarksBar={settings.showBookmarksBar}
+                alwaysOnTop={settings.alwaysOnTop}
+                onClose={() => setMenuOpen(false)}
+                onNewTab={() => addTab()}
+                onNewWindow={() => win.newWindow().catch(() => {})}
+                onBookmarks={() => openPanel("bookmarks")}
+                onHistory={() => openPanel("history")}
+                onDownloads={() => setDlPopover(true)}
+                onSettings={() => openPanel("settings")}
+                onToggleBookmarksBar={() =>
+                  setSettings((s) => saveSettings({ ...s, showBookmarksBar: !s.showBookmarksBar }))
+                }
+                onToggleAlwaysOnTop={toggleAlwaysOnTop}
               />
             </div>
           </>
