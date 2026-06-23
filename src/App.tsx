@@ -472,7 +472,7 @@ export function App() {
       {/* Tab strip doubles as the custom title bar (native decorations are off). */}
       <div className="flex select-none items-stretch bg-content1">
         <div
-          className="no-scrollbar flex min-w-0 flex-[0_1_auto] items-end gap-0.5 overflow-x-auto px-2 pt-1.5"
+          className="no-scrollbar flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto px-2 pt-1.5"
           // The strip has no vertical scroll, so map wheel to horizontal: tabs
           // keep their full width and overflow stays reachable (the bar's own
           // scrollbar is hidden).
@@ -522,10 +522,10 @@ export function App() {
           >
             <Plus size={14} />
           </button>
+          {/* Draggable filler: absorbs free space so tabs stay 180px until they
+              must shrink, and gives the window a drag handle. */}
+          <div className="min-w-0 flex-1 self-stretch" data-tauri-drag-region />
         </div>
-
-        {/* Draggable empty area between the tabs and the window controls. */}
-        <div className="min-w-[24px] flex-1 self-stretch" data-tauri-drag-region />
 
         {/* Custom window controls. */}
         <div className="flex shrink-0 items-stretch">
