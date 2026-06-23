@@ -212,7 +212,10 @@ export function App() {
         if (s.cmd === "newtab") addTab();
         else if (s.cmd === "closetab") closeTab(s.id);
         else if (s.cmd === "newwindow") win.newWindow().catch(() => {});
-        else if (s.cmd === "settings") setView((v) => (v === "settings" ? "web" : "settings"));
+        else if (s.cmd === "search") {
+          const u = toUrl(s.arg, settingsRef.current.searchEngine);
+          if (u) addTab(u);
+        } else if (s.cmd === "settings") setView((v) => (v === "settings" ? "web" : "settings"));
         else if (s.cmd === "focusurl") {
           setView("web");
           setDlPopover(false);
@@ -391,6 +394,18 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [addTab, closeTab, evalActive]);
+
+  // Suppress the engine's native context menu in the host chrome, except in text
+  // fields (cut/copy/paste). Tab pages render their own menu (see browser::TAB_JS).
+  useEffect(() => {
+    const onCtx = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      const editable = !!t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+      if (!editable) e.preventDefault();
+    };
+    window.addEventListener("contextmenu", onCtx);
+    return () => window.removeEventListener("contextmenu", onCtx);
+  }, []);
 
   const currentBookmarked = !!activeTab && isBookmarked(activeTab.url, bookmarks);
 

@@ -53,6 +53,7 @@ struct NavPayload {
 struct ShortcutPayload {
     id: String,
     cmd: String,
+    arg: String,
 }
 
 /// Injected at document-start into every tab:
@@ -99,6 +100,72 @@ const TAB_JS: &str = r#"
       else if (ctrl && k === 'n' && !e.shiftKey) cmd = 'newwindow';
       if (cmd) { e.preventDefault(); e.stopPropagation(); sig('cmd=' + cmd); }
     }, true);
+
+    // Custom in-page context menu (replaces the engine's native one). Bubble
+    // phase + defaultPrevented check so sites with their own menus keep theirs.
+    var ctxMenu = null;
+    function ctxClose() {
+      if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; }
+      document.removeEventListener('mousedown', ctxOutside, true);
+      document.removeEventListener('scroll', ctxClose, true);
+      window.removeEventListener('blur', ctxClose);
+    }
+    function ctxOutside(ev) { if (ctxMenu && !ctxMenu.contains(ev.target)) ctxClose(); }
+    function ctxCopy(t) { try { navigator.clipboard.writeText(t); } catch (e) {} }
+    function ctxItem(label, fn, disabled) {
+      var d = document.createElement('div');
+      d.textContent = label;
+      d.style.cssText = 'padding:7px 12px;font:13px system-ui,-apple-system,sans-serif;color:' + (disabled ? '#5f5f6a' : '#e4e4e7') + ';cursor:' + (disabled ? 'default' : 'pointer') + ';border-radius:6px;white-space:nowrap';
+      if (!disabled) {
+        d.onmouseenter = function () { d.style.background = '#2a2a32'; };
+        d.onmouseleave = function () { d.style.background = 'transparent'; };
+        d.onclick = function () { ctxClose(); try { fn(); } catch (e) {} };
+      }
+      return d;
+    }
+    function ctxSep() { var s = document.createElement('div'); s.style.cssText = 'height:1px;margin:4px 6px;background:rgba(255,255,255,.08)'; return s; }
+    document.addEventListener('contextmenu', function (e) {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      ctxClose();
+      var rows = [];
+      var a = e.target.closest ? e.target.closest('a[href]') : null;
+      var img = e.target.tagName === 'IMG' ? e.target : null;
+      var sel = (window.getSelection ? String(window.getSelection()) : '').trim();
+      var ed = e.target && (e.target.isContentEditable || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+      if (a) { rows.push(ctxItem('Open link in new tab', function () { newTab(a.href); })); rows.push(ctxItem('Copy link address', function () { ctxCopy(a.href); })); rows.push(ctxSep()); }
+      if (img) { rows.push(ctxItem('Open image in new tab', function () { newTab(img.src); })); rows.push(ctxItem('Copy image address', function () { ctxCopy(img.src); })); rows.push(ctxSep()); }
+      if (sel) {
+        rows.push(ctxItem('Copy', function () { ctxCopy(sel); }));
+        var lbl = sel.length > 24 ? sel.slice(0, 24) + '…' : sel;
+        rows.push(ctxItem('Search for "' + lbl + '"', function () { sig('cmd=search&q=' + encodeURIComponent(sel)); }));
+        rows.push(ctxSep());
+      }
+      if (ed) {
+        rows.push(ctxItem('Cut', function () { try { document.execCommand('cut'); } catch (e) {} }, !sel));
+        rows.push(ctxItem('Copy', function () { try { document.execCommand('copy'); } catch (e) {} }, !sel));
+        rows.push(ctxItem('Paste', function () { try { document.execCommand('paste'); } catch (e) { try { navigator.clipboard.readText().then(function (t) { try { document.execCommand('insertText', false, t); } catch (e) {} }); } catch (e) {} } }));
+        rows.push(ctxItem('Select all', function () { try { document.execCommand('selectAll'); } catch (e) {} }));
+        rows.push(ctxSep());
+      }
+      rows.push(ctxItem('Back', function () { history.back(); }));
+      rows.push(ctxItem('Forward', function () { history.forward(); }));
+      rows.push(ctxItem('Reload', function () { location.reload(); }));
+      ctxMenu = document.createElement('div');
+      ctxMenu.style.cssText = 'position:fixed;z-index:2147483647;min-width:190px;padding:5px;margin:0;background:#1a1a1f;border:1px solid rgba(255,255,255,.1);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.5)';
+      for (var i = 0; i < rows.length; i++) ctxMenu.appendChild(rows[i]);
+      document.documentElement.appendChild(ctxMenu);
+      var mw = ctxMenu.offsetWidth, mh = ctxMenu.offsetHeight;
+      var x = Math.min(e.clientX, (window.innerWidth || 800) - mw - 6);
+      var y = Math.min(e.clientY, (window.innerHeight || 600) - mh - 6);
+      ctxMenu.style.left = Math.max(6, x) + 'px';
+      ctxMenu.style.top = Math.max(6, y) + 'px';
+      setTimeout(function () {
+        document.addEventListener('mousedown', ctxOutside, true);
+        document.addEventListener('scroll', ctxClose, true);
+        window.addEventListener('blur', ctxClose);
+      }, 0);
+    }, false);
   } catch (e) {}
 })();
 "#;
@@ -167,6 +234,11 @@ pub async fn browser_tab_show(
                     let _ = app2.emit_to(&target, "browser-new-tab", val.to_string());
                 } else if let Some((_, cmd)) = u.query_pairs().find(|(k, _)| k == "cmd") {
                     let cmd = cmd.to_string();
+                    let arg = u
+                        .query_pairs()
+                        .find(|(k, _)| k == "q")
+                        .map(|(_, v)| v.to_string())
+                        .unwrap_or_default();
                     // These actions target the host chrome, so move OS keyboard
                     // focus back from the page webview to this window's React webview.
                     if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
@@ -174,7 +246,11 @@ pub async fn browser_tab_show(
                             let _ = w.set_focus();
                         }
                     }
-                    let _ = app2.emit_to(&target, "browser-shortcut", ShortcutPayload { id: id2.clone(), cmd });
+                    let _ = app2.emit_to(
+                        &target,
+                        "browser-shortcut",
+                        ShortcutPayload { id: id2.clone(), cmd, arg },
+                    );
                 }
                 return false; // cancel — keep the current page
             }
