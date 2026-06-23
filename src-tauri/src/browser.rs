@@ -83,6 +83,14 @@ const TAB_JS: &str = r#"
   } catch (e) {}
   try {
     function sig(q) {
+      // Prefer WebView2's web-messaging channel: it reaches the host WITHOUT a
+      // navigation, so pages with a beforeunload handler (e.g. YouTube Music while
+      // playing) don't pop a "Leave site?" prompt on every status update. Fall
+      // back to the sentinel navigation only if it's unavailable.
+      try {
+        var wv = window.chrome && window.chrome.webview;
+        if (wv && wv.postMessage) { wv.postMessage(q); return; }
+      } catch (e) {}
       try { window.location.href = 'https://newtab.local/?' + q; } catch (e) {}
     }
     function newTab(u) { if (u) sig('u=' + encodeURIComponent(u)); }
@@ -279,6 +287,71 @@ fn park(wv: &tauri::Webview) {
     let _ = wv.set_position(LogicalPosition::new(-20000.0, -20000.0));
 }
 
+/// Handle a page→app message — a `key=value&…` query string sent either over the
+/// WebView2 web-message channel (preferred) or the sentinel-navigation fallback.
+/// Emits the matching event to the tab's owning window.
+fn handle_sentinel(app: &AppHandle, target: &str, id: &str, query: &str) {
+    let url: tauri::Url = match format!("https://{NEWTAB_HOST}/?{}", query.trim_start_matches('?')).parse()
+    {
+        Ok(u) => u,
+        Err(_) => return,
+    };
+    if let Some((_, val)) = url.query_pairs().find(|(k, _)| k == "u") {
+        let _ = app.emit_to(target, "browser-new-tab", val.to_string());
+    } else if let Some((_, cmd)) = url.query_pairs().find(|(k, _)| k == "cmd") {
+        let cmd = cmd.to_string();
+        let arg = url
+            .query_pairs()
+            .find(|(k, _)| k == "q")
+            .map(|(_, v)| v.to_string())
+            .unwrap_or_default();
+        if cmd == "title" {
+            // Page title for the tab strip — data, not a user action.
+            let _ = app.emit_to(target, "browser-title", TitlePayload { id: id.to_string(), title: arg });
+        } else {
+            // These actions target the host chrome, so move OS keyboard focus back
+            // from the page webview to this window's React webview.
+            if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
+                if let Some(w) = app.get_webview_window(target) {
+                    let _ = w.set_focus();
+                }
+            }
+            let _ = app.emit_to(target, "browser-shortcut", ShortcutPayload { id: id.to_string(), cmd, arg });
+        }
+    }
+}
+
+/// Attach WebView2's web-message channel to a tab so the injected script can reach
+/// the app WITHOUT a navigation (avoids the page's beforeunload "Leave site?"
+/// prompt). Defensive — any failure just leaves the sentinel-navigation fallback.
+#[cfg(windows)]
+fn attach_messages(webview: &tauri::Webview, app: AppHandle, id: String, target: String) {
+    let _ = webview.with_webview(move |pw| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2WebMessageReceivedEventArgs;
+        use webview2_com::{take_pwstr, WebMessageReceivedEventHandler};
+        let core = match pw.controller().CoreWebView2() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let mut token: i64 = 0;
+        let handler = WebMessageReceivedEventHandler::create(Box::new(
+            move |_wv, args: Option<ICoreWebView2WebMessageReceivedEventArgs>| {
+                if let Some(args) = args {
+                    let mut s = Default::default();
+                    if args.TryGetWebMessageAsString(&mut s).is_ok() {
+                        handle_sentinel(&app, &target, &id, &take_pwstr(s));
+                    }
+                }
+                Ok(())
+            },
+        ));
+        let _ = core.add_WebMessageReceived(&handler, &mut token);
+    });
+}
+
+#[cfg(not(windows))]
+fn attach_messages(_webview: &tauri::Webview, _app: AppHandle, _id: String, _target: String) {}
+
 /// Show tab `id` at the given bounds (creating it on `about:blank` if new) and hide
 /// every other tab. Returns `true` if the webview was freshly created, so the
 /// frontend knows to navigate it to the tab's url.
@@ -331,40 +404,12 @@ pub async fn browser_tab_show(
             true
         })
         .on_navigation(move |u| {
-            // Events go only to this tab's owning window, so a second window
-            // doesn't react to the first window's pages.
+            // Fallback page→app channel: a page that can't reach the web-message
+            // channel signals via a sentinel navigation that we cancel here. Events
+            // go only to this tab's owning window, so a second window doesn't react
+            // to the first window's pages.
             if u.host_str() == Some(NEWTAB_HOST) {
-                if let Some((_, val)) = u.query_pairs().find(|(k, _)| k == "u") {
-                    let _ = app2.emit_to(&target, "browser-new-tab", val.to_string());
-                } else if let Some((_, cmd)) = u.query_pairs().find(|(k, _)| k == "cmd") {
-                    let cmd = cmd.to_string();
-                    let arg = u
-                        .query_pairs()
-                        .find(|(k, _)| k == "q")
-                        .map(|(_, v)| v.to_string())
-                        .unwrap_or_default();
-                    if cmd == "title" {
-                        // Page title for the tab strip — data, not a user action.
-                        let _ = app2.emit_to(
-                            &target,
-                            "browser-title",
-                            TitlePayload { id: id2.clone(), title: arg },
-                        );
-                    } else {
-                        // These actions target the host chrome, so move OS keyboard
-                        // focus back from the page webview to this window's React webview.
-                        if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
-                            if let Some(w) = app2.get_webview_window(&target) {
-                                let _ = w.set_focus();
-                            }
-                        }
-                        let _ = app2.emit_to(
-                            &target,
-                            "browser-shortcut",
-                            ShortcutPayload { id: id2.clone(), cmd, arg },
-                        );
-                    }
-                }
+                handle_sentinel(&app2, &target, &id2, u.query().unwrap_or(""));
                 return false; // cancel — keep the current page
             }
             let _ = app2.emit_to(&target, "browser-nav", NavPayload { id: id2.clone(), url: u.to_string() });
@@ -375,6 +420,8 @@ pub async fn browser_tab_show(
         .map_err(|e| e.to_string())?;
     // Apply the user's per-kind permission defaults (camera/mic/geolocation/...).
     crate::permissions::attach(&tab, app.state::<crate::permissions::Perms>().0.clone());
+    // Wire the navigation-free page→app message channel (see attach_messages).
+    attach_messages(&tab, app.clone(), id.clone(), win_label.clone());
     // Let the blank page come up before the frontend navigates to the real site.
     tokio::time::sleep(std::time::Duration::from_millis(120)).await;
     Ok(true)
