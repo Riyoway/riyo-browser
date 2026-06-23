@@ -1,15 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for the main, secondary, and popup browser windows.",
-  "windows": ["main", "w*", "menu-popup"],
+  "description": "Capabilities for the main and secondary browser windows.",
+  "windows": ["main", "w*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "core:window:allow-set-always-on-top",
-    "core:window:allow-set-size"
+    "core:window:allow-set-always-on-top"
   ]
 }

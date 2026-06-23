@@ -414,65 +414,6 @@ impl PendingOpen {
     }
 }
 
-/// Label of the window that opened the overflow menu popup, so its selections
-/// route back to the right window.
-pub struct PopupOwner(pub Mutex<String>);
-
-impl PopupOwner {
-    pub fn new() -> Self {
-        PopupOwner(Mutex::new(String::new()))
-    }
-}
-
-/// Width of the overflow popup window (must match MenuPopup's CSS width).
-const MENU_W: f64 = 280.0;
-
-/// Toggle the toolbar's overflow (⋮) menu. It's a small frameless, always-on-top
-/// popup WINDOW hosting the custom menu UI, so it floats over the tab webview
-/// (which can't have host DOM drawn over it) without shrinking the page — while
-/// still matching the app's style. `x`/`y` are the menu's top-left in the
-/// caller's content area (logical px); converted here to screen coordinates.
-#[tauri::command]
-pub async fn open_overflow_menu(window: tauri::Window, x: f64, y: f64) -> Result<(), String> {
-    let app = window.app_handle();
-    if let Some(w) = app.get_webview_window("menu-popup") {
-        let _ = w.close();
-        return Ok(()); // toggle off
-    }
-    *app.state::<PopupOwner>().0.lock().unwrap() = window.label().to_string();
-
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let pos = window.inner_position().map_err(|e| e.to_string())?;
-    let sx = (pos.x as f64 + x * scale) as i32;
-    let sy = (pos.y as f64 + y * scale) as i32;
-
-    let popup = WebviewWindowBuilder::new(app, "menu-popup", WebviewUrl::App("index.html".into()))
-        .visible(false)
-        .decorations(false)
-        .resizable(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .focused(true)
-        .shadow(true)
-        .inner_size(MENU_W, 224.0)
-        .additional_browser_args(BROWSER_ARGS)
-        .build()
-        .map_err(|e| e.to_string())?;
-    let _ = popup.set_position(tauri::PhysicalPosition::new(sx, sy));
-    let _ = popup.show();
-    let _ = popup.set_focus();
-    Ok(())
-}
-
-/// An overflow-menu selection from the popup window — routed to its owner.
-#[tauri::command]
-pub fn popup_action(app: AppHandle, action: String) {
-    let owner = app.state::<PopupOwner>().0.lock().unwrap().clone();
-    if !owner.is_empty() {
-        let _ = app.emit_to(owner, "overflow-action", action);
-    }
-}
-
 /// Open a fresh browser window (its own tabs, independent of this one). If `url`
 /// is given, the new window opens it as its first tab.
 ///

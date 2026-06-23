@@ -16,7 +16,6 @@ pub fn run() {
         .manage(downloads::Downloads::new())
         .manage(browser::WindowSeq::new())
         .manage(browser::PendingOpen::new())
-        .manage(browser::PopupOwner::new())
         .setup(|app| {
             setup_tray(app.handle())?;
             Ok(())
@@ -48,8 +47,6 @@ pub fn run() {
             browser::browser_hide_all,
             browser::new_window,
             browser::take_pending_open,
-            browser::open_overflow_menu,
-            browser::popup_action,
             net::http_get_text,
             downloads::download_enqueue,
             downloads::download_list,
