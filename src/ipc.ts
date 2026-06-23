@@ -79,4 +79,7 @@ export const events = {
   /** The window was restored from the tray; recreate the torn-down active tab. */
   onMainShown: (cb: () => void): Promise<UnlistenFn> =>
     listen<null>("main-shown", () => cb()),
+  /** A browser shortcut (Ctrl+T/W/L/,) pressed while a tab page had focus. */
+  onShortcut: (cb: (s: { id: string; cmd: string }) => void): Promise<UnlistenFn> =>
+    listen<{ id: string; cmd: string }>("browser-shortcut", (e) => cb(e.payload)),
 };

@@ -193,11 +193,28 @@ export function App() {
     track(events.onNav((e) => setTabUrl(e.id, e.url)));
     track(events.onNewTab((url) => addTab(url)));
     track(events.onMainShown(() => sync()));
+    // Shortcuts forwarded from a focused tab page (the host keydown listener
+    // can't see keys while a tab webview has focus).
+    track(
+      events.onShortcut((s) => {
+        if (s.cmd === "newtab") addTab();
+        else if (s.cmd === "closetab") closeTab(s.id);
+        else if (s.cmd === "settings") setView((v) => (v === "settings" ? "web" : "settings"));
+        else if (s.cmd === "focusurl") {
+          setView("web");
+          setDlPopover(false);
+          setTimeout(() => {
+            addrRef.current?.focus();
+            addrRef.current?.select();
+          }, 30);
+        }
+      })
+    );
     return () => {
       disposed = true;
       uns.forEach((f) => f());
     };
-  }, [addTab, setTabUrl, sync]);
+  }, [addTab, closeTab, setTabUrl, sync]);
 
   // Download manager: seed the list, push the persisted batch limit, and keep
   // the list live from the backend (full snapshot on change + byte progress).

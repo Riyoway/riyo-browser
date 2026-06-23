@@ -47,15 +47,26 @@ struct NavPayload {
     url: String,
 }
 
-/// Injected at document-start into every tab. Turns ctrl-click / middle-click on a
-/// link into a new-tab request (a real page→app channel isn't available for remote
-/// pages, so it navigates to a sentinel that `on_navigation` intercepts).
+#[derive(Clone, Serialize)]
+struct ShortcutPayload {
+    id: String,
+    cmd: String,
+}
+
+/// Injected at document-start into every tab. Two jobs, both via the same
+/// sentinel-navigation channel (`newtab.local`) that `on_navigation` intercepts,
+/// since a real page→app channel isn't available for remote pages:
+///  1. ctrl/middle-click on a link → open it in a new tab (`?u=`).
+///  2. browser shortcuts that the page would otherwise swallow → forward to the
+///     app (`?cmd=`) so Ctrl+T/W/L/, work even while the page has focus. (Ctrl+R,
+///     F5 and Alt+←/→ are handled natively by the engine in-page.)
 const TAB_JS: &str = r#"
 (function () {
   try {
-    function newTab(u) {
-      try { if (u) window.location.href = 'https://newtab.local/?u=' + encodeURIComponent(u); } catch (e) {}
+    function sig(q) {
+      try { window.location.href = 'https://newtab.local/?' + q; } catch (e) {}
     }
+    function newTab(u) { if (u) sig('u=' + encodeURIComponent(u)); }
     function linkOf(t) { return t && t.closest ? t.closest('a[href]') : null; }
     document.addEventListener('click', function (e) {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -66,6 +77,16 @@ const TAB_JS: &str = r#"
       if (e.button !== 1) return;
       var a = linkOf(e.target);
       if (a && a.href) { e.preventDefault(); e.stopPropagation(); newTab(a.href); }
+    }, true);
+    document.addEventListener('keydown', function (e) {
+      var ctrl = e.ctrlKey || e.metaKey;
+      var k = (e.key || '').toLowerCase();
+      var cmd = null;
+      if (ctrl && k === 't') cmd = 'newtab';
+      else if (ctrl && k === 'w') cmd = 'closetab';
+      else if (ctrl && k === 'l') cmd = 'focusurl';
+      else if (ctrl && k === ',') cmd = 'settings';
+      if (cmd) { e.preventDefault(); e.stopPropagation(); sig('cmd=' + cmd); }
     }, true);
   } catch (e) {}
 })();
@@ -128,6 +149,16 @@ pub async fn browser_tab_show(
             if u.host_str() == Some(NEWTAB_HOST) {
                 if let Some((_, val)) = u.query_pairs().find(|(k, _)| k == "u") {
                     let _ = app2.emit("browser-new-tab", val.to_string());
+                } else if let Some((_, cmd)) = u.query_pairs().find(|(k, _)| k == "cmd") {
+                    let cmd = cmd.to_string();
+                    // These actions target the host chrome, so move OS keyboard
+                    // focus back from the page webview to the main (React) webview.
+                    if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
+                        if let Some(w) = app2.get_webview_window("main") {
+                            let _ = w.set_focus();
+                        }
+                    }
+                    let _ = app2.emit("browser-shortcut", ShortcutPayload { id: id2.clone(), cmd });
                 }
                 return false; // cancel — keep the current page
             }
