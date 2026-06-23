@@ -33,6 +33,8 @@ export const api = {
   hideAll: () => invoke<void>("browser_hide_all"),
   /** Backend HTTPS GET (bypasses webview CORS) — used by the New Tab page for RSS. */
   httpGetText: (url: string) => invoke<string>("http_get_text", { url }),
+  /** Push the website permission defaults (kind id → "ask"|"allow"|"block"). */
+  setPermissions: (perms: Record<string, string>) => invoke<void>("set_permissions", { perms }),
 };
 
 // ---- downloads (queue-managed; see src-tauri/src/downloads.rs) ----

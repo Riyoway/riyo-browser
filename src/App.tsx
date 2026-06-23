@@ -29,7 +29,7 @@ import {
 } from "./ipc";
 import { loadTabs, NEWTAB, newId, persistTabs, titleOf, type Tab, type TabState } from "./tabs";
 import { NewTabPage } from "./NewTabPage";
-import { loadSettings, saveSettings, toUrl, type Settings } from "./settings";
+import { loadSettings, saveSettings, SITE_PERMISSIONS, toUrl, type Settings } from "./settings";
 import { clearHistory, loadHistory, pushHistory, removeHistoryKeys, type HistoryEntry } from "./history";
 import {
   clearBookmarks,
@@ -92,6 +92,14 @@ export function App() {
   useEffect(() => {
     win.setAlwaysOnTop(settings.alwaysOnTop).catch(() => {});
   }, [settings.alwaysOnTop]);
+
+  // Push the website permission defaults to the backend; the interceptor on each
+  // tab webview applies them (allow/block resolve silently, ask → engine prompt).
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    for (const p of SITE_PERMISSIONS) map[String(p.kind)] = settings.sitePermissions[p.key] ?? "ask";
+    api.setPermissions(map).catch(() => {});
+  }, [settings.sitePermissions]);
 
   const toggleAlwaysOnTop = useCallback(
     () => setSettings((s) => saveSettings({ ...s, alwaysOnTop: !s.alwaysOnTop })),

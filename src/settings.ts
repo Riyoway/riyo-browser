@@ -6,6 +6,18 @@ import { NEWTAB } from "./tabs";
 export type SearchEngine = "google" | "bing" | "duckduckgo";
 export type Theme = "dark" | "light";
 export type TempUnit = "celsius" | "fahrenheit";
+export type PermDecision = "ask" | "allow" | "block";
+
+// Website permission kinds we let the user pre-decide. `kind` is the WebView2
+// COREWEBVIEW2_PERMISSION_KIND value the backend matches on.
+export const SITE_PERMISSIONS: { key: string; label: string; description: string; kind: number }[] = [
+  { key: "camera", label: "Camera", description: "Take photos and video.", kind: 2 },
+  { key: "microphone", label: "Microphone", description: "Record audio.", kind: 1 },
+  { key: "geolocation", label: "Location", description: "Access your precise location.", kind: 3 },
+  { key: "notifications", label: "Notifications", description: "Show desktop notifications.", kind: 4 },
+  { key: "sensors", label: "Motion & light sensors", description: "Read device sensors.", kind: 5 },
+  { key: "clipboard", label: "Clipboard", description: "Read text and images you've copied.", kind: 6 },
+];
 
 export interface Settings {
   homepage: string;
@@ -28,6 +40,8 @@ export interface Settings {
   showNews: boolean;
   /** New Tab page: load site icons / favicons (DuckDuckGo). */
   showSiteIcons: boolean;
+  /** Default decision per website permission kind (by SITE_PERMISSIONS key). */
+  sitePermissions: Record<string, PermDecision>;
 }
 
 const KEY = "tauri-browser.settings";
@@ -59,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showWeather: true,
   showNews: true,
   showSiteIcons: true,
+  sitePermissions: {},
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {

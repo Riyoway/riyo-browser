@@ -321,9 +321,11 @@ pub async fn browser_tab_show(
             let _ = app2.emit_to(&target, "browser-nav", NavPayload { id: id2.clone(), url: u.to_string() });
             true
         });
-    window
+    let tab = window
         .add_child(builder, LogicalPosition::new(x, y), LogicalSize::new(w, h))
         .map_err(|e| e.to_string())?;
+    // Apply the user's per-kind permission defaults (camera/mic/geolocation/...).
+    crate::permissions::attach(&tab, app.state::<crate::permissions::Perms>().0.clone());
     // Let the blank page come up before the frontend navigates to the real site.
     tokio::time::sleep(std::time::Duration::from_millis(120)).await;
     Ok(true)

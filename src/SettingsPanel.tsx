@@ -14,6 +14,8 @@ import { PanelShell } from "./PanelShell";
 import {
   DEFAULT_HOMEPAGE,
   SEARCH_ENGINE_LABEL,
+  SITE_PERMISSIONS,
+  type PermDecision,
   type SearchEngine,
   type Settings,
   type TempUnit,
@@ -219,13 +221,48 @@ export function SettingsPanel({
 
             {active === "permissions" && (
               <div className="space-y-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-foreground-500">
+                  Website permissions
+                </div>
+                <div className="-mt-2 text-xs text-foreground-500">
+                  Default response when a site asks for access. “Ask each time” shows the engine's
+                  own prompt; Allow / Block answer silently without one.
+                </div>
+                {SITE_PERMISSIONS.map((p) => (
+                  <Row key={p.key} label={p.label} description={p.description}>
+                    <Select
+                      aria-label={p.label}
+                      className="w-40"
+                      size="sm"
+                      variant="bordered"
+                      selectedKeys={[settings.sitePermissions[p.key] ?? "ask"]}
+                      disallowEmptySelection
+                      onSelectionChange={(keys) => {
+                        const v = Array.from(keys)[0] as PermDecision | undefined;
+                        if (v)
+                          onChange({
+                            ...settings,
+                            sitePermissions: { ...settings.sitePermissions, [p.key]: v },
+                          });
+                      }}
+                    >
+                      {(["ask", "allow", "block"] as const).map((k) => (
+                        <SelectItem key={k}>{LOC_LABEL[k]}</SelectItem>
+                      ))}
+                    </Select>
+                  </Row>
+                ))}
+
+                <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-foreground-500">
+                  New Tab page
+                </div>
                 <Row
-                  label="Location"
-                  description="For the New Tab weather (approximate city by IP, never the GPS prompt)."
+                  label="New Tab location"
+                  description="For the weather — approximate city by IP, never the GPS prompt."
                 >
                   <Select
-                    aria-label="Location permission"
-                    className="w-44"
+                    aria-label="New Tab location permission"
+                    className="w-40"
                     size="sm"
                     variant="bordered"
                     selectedKeys={[loc]}
@@ -240,10 +277,6 @@ export function SettingsPanel({
                     ))}
                   </Select>
                 </Row>
-
-                <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-foreground-500">
-                  New Tab page content
-                </div>
                 <Row label="Weather" description="Fetch local weather from Open-Meteo.">
                   <Switch
                     isSelected={settings.showWeather}
@@ -262,11 +295,6 @@ export function SettingsPanel({
                     onValueChange={(v) => onChange({ ...settings, showSiteIcons: v })}
                   />
                 </Row>
-
-                <div className="rounded-large border border-divider bg-content1 p-3 text-xs text-foreground-500">
-                  Permission prompts from the websites you visit (camera, microphone, notifications)
-                  are still shown by the engine itself.
-                </div>
               </div>
             )}
 

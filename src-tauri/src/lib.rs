@@ -1,6 +1,7 @@
 mod browser;
 mod downloads;
 mod net;
+mod permissions;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager, WindowEvent};
@@ -16,6 +17,7 @@ pub fn run() {
         .manage(downloads::Downloads::new())
         .manage(browser::WindowSeq::new())
         .manage(browser::PendingOpen::new())
+        .manage(permissions::Perms::new())
         .setup(|app| {
             setup_tray(app.handle())?;
             Ok(())
@@ -48,6 +50,7 @@ pub fn run() {
             browser::new_window,
             browser::take_pending_open,
             net::http_get_text,
+            permissions::set_permissions,
             downloads::download_enqueue,
             downloads::download_list,
             downloads::download_max_concurrent,
