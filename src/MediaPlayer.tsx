@@ -16,13 +16,21 @@ export function MediaPlayer({
   media,
   onPlayPause,
   onGoToTab,
+  onContextMenu,
 }: {
   media: MediaState;
   onPlayPause: () => void;
   onGoToTab: () => void;
+  onContextMenu: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 rounded-full bg-content2 py-1 pl-1 pr-1">
+    <div
+      className="flex shrink-0 items-center gap-1 rounded-full bg-content2 py-1 pl-1 pr-1"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu();
+      }}
+    >
       <button
         type="button"
         onClick={onGoToTab}

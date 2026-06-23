@@ -10,11 +10,13 @@ import {
   History as HistoryIcon,
   Home,
   Minus,
+  PictureInPicture2,
   Pin,
   Plus,
   RotateCw,
   Search,
   Square,
+  SquareArrowOutUpRight,
   Star,
   X,
 } from "lucide-react";
@@ -59,6 +61,7 @@ export function App() {
   const [dlItems, setDlItems] = useState<DownloadItem[]>([]);
   const [dlPopover, setDlPopover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mediaMenu, setMediaMenu] = useState(false);
   const [media, setMedia] = useState<MediaState | null>(null);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
@@ -72,6 +75,8 @@ export function App() {
   dlPopoverRef.current = dlPopover;
   const menuOpenRef = useRef(false);
   menuOpenRef.current = menuOpen;
+  const mediaMenuRef = useRef(false);
+  mediaMenuRef.current = mediaMenu;
 
   const holderRef = useRef<HTMLDivElement>(null);
   const addrRef = useRef<HTMLInputElement>(null);
@@ -181,7 +186,13 @@ export function App() {
     // Shrink the webview to free a right-hand strip for the overflow menu /
     // downloads popover, instead of hiding the whole page behind them (a native
     // webview can't be drawn under host DOM).
-    const reserve = menuOpenRef.current ? 290 : dlPopoverRef.current ? 384 : 0;
+    const reserve = menuOpenRef.current
+      ? 290
+      : dlPopoverRef.current
+        ? 384
+        : mediaMenuRef.current
+          ? 230
+          : 0;
     const width = Math.max(200, r.width - reserve);
     api
       .tabShow(activeId, r.left, r.top, width, r.height)
@@ -199,7 +210,12 @@ export function App() {
   useEffect(() => {
     if (view === "web") sync();
     else api.hideAll().catch(() => {});
-  }, [view, activeId, sync, dlPopover, menuOpen]);
+  }, [view, activeId, sync, dlPopover, menuOpen, mediaMenu]);
+
+  // Close the media menu when the media goes away (track ended / tab closed).
+  useEffect(() => {
+    if (!media) setMediaMenu(false);
+  }, [media]);
 
   // Keep bounds in sync with the layout; park everything when unmounting.
   useEffect(() => {
@@ -444,7 +460,8 @@ export function App() {
         e.preventDefault();
         evalActive("forward");
       } else if (k === "escape") {
-        if (menuOpenRef.current) setMenuOpen(false);
+        if (mediaMenuRef.current) setMediaMenu(false);
+        else if (menuOpenRef.current) setMenuOpen(false);
         else if (dlPopoverRef.current) setDlPopover(false);
         else if (viewRef.current !== "web") setView("web");
       }
@@ -593,6 +610,12 @@ export function App() {
               api.tabMedia(media.tabId, "playpause").catch(() => {});
             }}
             onGoToTab={() => activate(media.tabId)}
+            onContextMenu={() => {
+              setView("web");
+              setDlPopover(false);
+              setMenuOpen(false);
+              setMediaMenu(true);
+            }}
           />
         )}
 
@@ -767,6 +790,37 @@ export function App() {
                 }
                 onToggleAlwaysOnTop={toggleAlwaysOnTop}
               />
+            </div>
+          </>
+        )}
+
+        {/* Music-player context menu (right-click) — Picture-in-Picture etc. */}
+        {mediaMenu && media && media.has && view === "web" && (
+          <>
+            <div className="anim-fade absolute inset-0 z-40" onClick={() => setMediaMenu(false)} />
+            <div className="anim-pop absolute right-3 top-3 z-50 w-[230px] rounded-large border border-divider bg-content1 p-1.5 text-foreground shadow-2xl">
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-medium px-3 py-2 text-sm text-foreground-700 transition-colors hover:bg-content2 hover:text-foreground"
+                onClick={() => {
+                  api.tabMedia(media.tabId, "pip").catch(() => {});
+                  setMediaMenu(false);
+                }}
+              >
+                <PictureInPicture2 size={16} className="text-foreground-500" />
+                Picture in Picture
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-medium px-3 py-2 text-sm text-foreground-700 transition-colors hover:bg-content2 hover:text-foreground"
+                onClick={() => {
+                  activate(media.tabId);
+                  setMediaMenu(false);
+                }}
+              >
+                <SquareArrowOutUpRight size={16} className="text-foreground-500" />
+                Go to tab
+              </button>
             </div>
           </>
         )}
