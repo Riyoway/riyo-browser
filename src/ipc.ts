@@ -20,9 +20,12 @@ export const win = {
   takePendingOpen: () => invoke<string | null>("take_pending_open"),
   /** This window's label, for drag-to-window routing. */
   label: appWindow.label,
-  /** Outer bounds (logical px) of every browser window — used to route a
+  /** Outer bounds (physical px) of every browser window — used to route a
    *  dragged-out tab to the window it was dropped over. */
   windowBounds: () => invoke<WinBounds[]>("window_bounds"),
+  /** Global cursor position (physical px) — read at drag end (webview drag
+   *  coordinates are unreliable). */
+  cursorPosition: () => invoke<[number, number]>("cursor_position"),
   /** Move a dragged tab into another existing window. */
   moveTabToWindow: (target: string, url: string) =>
     invoke<void>("move_tab_to_window", { target, url }),

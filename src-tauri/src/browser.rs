@@ -550,26 +550,33 @@ pub struct WinBounds {
     h: i32,
 }
 
-/// Outer bounds of every browser window in *logical* (CSS) pixels, so the
-/// frontend can tell which window a dragged tab was dropped over (a tab dropped
-/// outside all of them becomes a new window).
+/// Outer bounds of every browser window in *physical* screen pixels — matched
+/// against `cursor_position` (also physical) so a dragged tab routes by the
+/// window it was dropped over, free of any DPI/CSS-pixel ambiguity.
 #[tauri::command]
 pub fn window_bounds(app: AppHandle) -> Vec<WinBounds> {
     let mut out = Vec::new();
     for (label, w) in app.webview_windows() {
-        if let (Ok(pos), Ok(size), Ok(scale)) =
-            (w.outer_position(), w.outer_size(), w.scale_factor())
-        {
+        if let (Ok(pos), Ok(size)) = (w.outer_position(), w.outer_size()) {
             out.push(WinBounds {
                 label,
-                x: (pos.x as f64 / scale).round() as i32,
-                y: (pos.y as f64 / scale).round() as i32,
-                w: (size.width as f64 / scale).round() as i32,
-                h: (size.height as f64 / scale).round() as i32,
+                x: pos.x,
+                y: pos.y,
+                w: size.width as i32,
+                h: size.height as i32,
             });
         }
     }
     out
+}
+
+/// Global cursor position in *physical* screen pixels (matches `window_bounds`).
+/// Read at drag end since the webview's own drag coordinates are unreliable.
+#[tauri::command]
+pub fn cursor_position(app: AppHandle) -> (i32, i32) {
+    app.cursor_position()
+        .map(|p| (p.x.round() as i32, p.y.round() as i32))
+        .unwrap_or((i32::MIN, i32::MIN))
 }
 
 /// Move a dragged tab into another existing window: it opens `url` there (via the
