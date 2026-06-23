@@ -18,7 +18,23 @@ export const win = {
   newWindow: (url?: string) => invoke<void>("new_window", { url: url ?? null }),
   /** This window's pending "open this url on startup" (consumed once). */
   takePendingOpen: () => invoke<string | null>("take_pending_open"),
+  /** This window's label, for drag-to-window routing. */
+  label: appWindow.label,
+  /** Outer bounds (logical px) of every browser window — used to route a
+   *  dragged-out tab to the window it was dropped over. */
+  windowBounds: () => invoke<WinBounds[]>("window_bounds"),
+  /** Move a dragged tab into another existing window. */
+  moveTabToWindow: (target: string, url: string) =>
+    invoke<void>("move_tab_to_window", { target, url }),
 };
+
+export interface WinBounds {
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export const api = {
   /** Show tab `id` at the given (logical px) bounds; returns true if it was freshly

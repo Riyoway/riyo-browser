@@ -49,6 +49,8 @@ pub fn run() {
             browser::browser_hide_all,
             browser::new_window,
             browser::take_pending_open,
+            browser::window_bounds,
+            browser::move_tab_to_window,
             net::http_get_text,
             permissions::set_permissions,
             downloads::download_enqueue,

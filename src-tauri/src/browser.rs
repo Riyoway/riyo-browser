@@ -494,6 +494,47 @@ pub fn take_pending_open(window: tauri::Window) -> Option<String> {
     app_state_remove(&window)
 }
 
+#[derive(Clone, Serialize)]
+pub struct WinBounds {
+    label: String,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+/// Outer bounds of every browser window in *logical* (CSS) pixels, so the
+/// frontend can tell which window a dragged tab was dropped over (a tab dropped
+/// outside all of them becomes a new window).
+#[tauri::command]
+pub fn window_bounds(app: AppHandle) -> Vec<WinBounds> {
+    let mut out = Vec::new();
+    for (label, w) in app.webview_windows() {
+        if let (Ok(pos), Ok(size), Ok(scale)) =
+            (w.outer_position(), w.outer_size(), w.scale_factor())
+        {
+            out.push(WinBounds {
+                label,
+                x: (pos.x as f64 / scale).round() as i32,
+                y: (pos.y as f64 / scale).round() as i32,
+                w: (size.width as f64 / scale).round() as i32,
+                h: (size.height as f64 / scale).round() as i32,
+            });
+        }
+    }
+    out
+}
+
+/// Move a dragged tab into another existing window: it opens `url` there (via the
+/// same channel ctrl-click uses) and focuses it. The source window drops its tab.
+#[tauri::command]
+pub fn move_tab_to_window(app: AppHandle, target: String, url: String) {
+    let _ = app.emit_to(&target, "browser-new-tab", url);
+    if let Some(w) = app.get_webview_window(&target) {
+        let _ = w.set_focus();
+    }
+}
+
 fn app_state_remove(window: &tauri::Window) -> Option<String> {
     window
         .app_handle()

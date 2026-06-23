@@ -64,6 +64,7 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mediaMenu, setMediaMenu] = useState(false);
   const [media, setMedia] = useState<MediaState | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
   const stateRef = useRef<TabState>({ tabs, activeId });
@@ -166,6 +167,43 @@ export function App() {
       return persistTabs({ ...s, tabs: s.tabs.map((x) => (x.id === id ? { ...x, title: t } : x)) });
     });
   }, []);
+
+  // ---- tab drag: reorder within the strip; tear off / move across windows ----
+  const reorderTab = useCallback((dragId: string, overId: string) => {
+    if (dragId === overId) return;
+    setState((s) => {
+      const from = s.tabs.findIndex((t) => t.id === dragId);
+      const to = s.tabs.findIndex((t) => t.id === overId);
+      if (from === -1 || to === -1) return s;
+      const tabs = [...s.tabs];
+      const [moved] = tabs.splice(from, 1);
+      tabs.splice(to, 0, moved);
+      return persistTabs({ ...s, tabs });
+    });
+  }, []);
+
+  // On drop: inside this window → keep (reorder already applied); over another
+  // window → move the tab there; outside every window → tear off to a new window.
+  const onTabDragEnd = useCallback(
+    (screenX: number, screenY: number, tab: Tab) => {
+      setDragId(null);
+      win
+        .windowBounds()
+        .then((bounds) => {
+          const inside = (b: { x: number; y: number; w: number; h: number }) =>
+            screenX >= b.x && screenX <= b.x + b.w && screenY >= b.y && screenY <= b.y + b.h;
+          const self = bounds.find((b) => b.label === win.label);
+          if (self && inside(self)) return; // dropped within this window
+          if (stateRef.current.tabs.length <= 1 && tab.url === NEWTAB) return; // nothing to move
+          const target = bounds.find((b) => b.label !== win.label && inside(b));
+          if (target) win.moveTabToWindow(target.label, tab.url).catch(() => {});
+          else win.newWindow(tab.url === NEWTAB ? undefined : tab.url).catch(() => {});
+          closeTab(tab.id);
+        })
+        .catch(() => {});
+    },
+    [closeTab]
+  );
 
   // ---- webview placement ----
   // Show the active tab at the placeholder bounds (creating it on about:blank if
@@ -508,8 +546,20 @@ export function App() {
                 "group flex min-w-[72px] max-w-[180px] flex-[0_1_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
                 (t.id === activeId
                   ? "bg-background text-foreground"
-                  : "text-foreground-500 hover:bg-content2 hover:text-foreground")
+                  : "text-foreground-500 hover:bg-content2 hover:text-foreground") +
+                (t.id === dragId ? " opacity-40" : "")
               }
+              draggable
+              onDragStart={(e) => {
+                setDragId(t.id);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", t.url);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (dragId && dragId !== t.id) reorderTab(dragId, t.id);
+              }}
+              onDragEnd={(e) => onTabDragEnd(e.screenX, e.screenY, t)}
               onClick={() => activate(t.id)}
               onAuxClick={(e) => {
                 if (e.button === 1) {

@@ -16,6 +16,7 @@ export function Favicon({ url, size = 16 }: { url: string; size?: number }) {
       alt=""
       width={size}
       height={size}
+      draggable={false}
       className="shrink-0 rounded-sm"
       onError={() => setStage((s) => s + 1)}
     />
