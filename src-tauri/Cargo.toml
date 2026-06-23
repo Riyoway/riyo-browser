@@ -1,0 +1,20 @@
+[package]
+name = "tauri-browser"
+version = "0.1.0"
+description = "A tabbed, embedded browser built on Tauri 2"
+edition = "2021"
+
+[lib]
+# The lib is consumed by main.rs (desktop) and the mobile entry point.
+name = "tauri_browser_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# `unstable` enables multiple webviews per window (Window::add_child).
+tauri = { version = "2", features = ["unstable", "tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time"] }
