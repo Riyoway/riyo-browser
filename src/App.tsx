@@ -484,8 +484,10 @@ export function App() {
           {tabs.map((t) => (
             <div
               key={t.id}
+              // All tabs share one width: 180px while they fit, shrinking together
+              // (uniformly, down to a 52px floor) only when the strip overflows.
               className={
-                "group flex w-[180px] flex-[0_0_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
+                "group flex min-w-[52px] max-w-[180px] flex-[0_1_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
                 (t.id === activeId
                   ? "bg-background text-foreground"
                   : "text-foreground-500 hover:bg-content2 hover:text-foreground")
