@@ -4,16 +4,28 @@ mod net;
 mod permissions;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{Emitter, Manager, WindowEvent};
+use std::sync::Mutex;
+use tauri::{Emitter, Manager, PhysicalPosition, WindowEvent};
 
 /// Set only when the user explicitly quits from the tray, so the close handler
 /// knows to really exit instead of hiding to the tray.
 struct QuitFlag(AtomicBool);
 
+/// The main window's on-screen position, saved when it parks off-screen for the
+/// tray so it can be restored to the same spot.
+struct TrayPos(Mutex<Option<(i32, i32)>>);
+
+/// Where the main window parks while "in the tray" — far off every monitor. We
+/// move it here (rather than hide/minimize) because keeping the tab webviews
+/// alive on a hidden OR minimized window stops the window ever re-showing
+/// (tauri#9798); a normal-but-off-screen window dodges that and keeps playback.
+const TRAY_OFFSCREEN: PhysicalPosition<i32> = PhysicalPosition::new(-32000, -32000);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(QuitFlag(AtomicBool::new(false)))
+        .manage(TrayPos(Mutex::new(None)))
         .manage(downloads::Downloads::new())
         .manage(browser::WindowSeq::new())
         .manage(browser::PendingOpen::new())
@@ -27,14 +39,18 @@ pub fn run() {
                 let app = window.app_handle();
                 if window.label() == "main" {
                     if !app.state::<QuitFlag>().0.load(Ordering::SeqCst) {
-                        // Minimize to the tray instead of quitting. We deliberately
-                        // do NOT hide() or tear the tabs down: keeping the webviews
-                        // alive lets media keep playing in the background, and
-                        // minimizing (vs hiding) avoids the hidden-child-webview
-                        // re-show bug (tauri#9798). skip_taskbar hides the button.
+                        // Park off-screen to the tray instead of quitting — keeping
+                        // the tab webviews alive so media keeps playing. We don't
+                        // hide/minimize (that would block the re-show, tauri#9798);
+                        // a normal off-screen window restores by just moving back.
                         api.prevent_close();
-                        let _ = window.minimize();
+                        if let Ok(p) = window.outer_position() {
+                            if p.x > -30000 {
+                                *app.state::<TrayPos>().0.lock().unwrap() = Some((p.x, p.y));
+                            }
+                        }
                         let _ = window.set_skip_taskbar(true);
+                        let _ = window.set_position(TRAY_OFFSCREEN);
                     }
                 } else {
                     // Secondary window: tear down its tabs, then let it close.
@@ -114,7 +130,11 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.set_skip_taskbar(false);
-        let _ = w.unminimize();
+        // Move back from the off-screen tray spot to where it was.
+        if let Some((x, y)) = app.state::<TrayPos>().0.lock().unwrap().take() {
+            let _ = w.set_position(PhysicalPosition::new(x, y));
+        }
+        let _ = w.unminimize(); // in case the user minimized it manually
         let _ = w.show();
         let _ = w.set_focus();
         // Tabs stayed alive in the tray; just reposition the active webview.
