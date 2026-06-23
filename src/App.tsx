@@ -9,6 +9,7 @@ import {
   History as HistoryIcon,
   Home,
   Minus,
+  Pin,
   Plus,
   RotateCw,
   Search,
@@ -79,6 +80,16 @@ export function App() {
     root.classList.toggle("dark", settings.theme === "dark");
     root.classList.toggle("light", settings.theme === "light");
   }, [settings.theme]);
+
+  // Keep the window's always-on-top state in sync with the setting.
+  useEffect(() => {
+    win.setAlwaysOnTop(settings.alwaysOnTop).catch(() => {});
+  }, [settings.alwaysOnTop]);
+
+  const toggleAlwaysOnTop = useCallback(
+    () => setSettings((s) => saveSettings({ ...s, alwaysOnTop: !s.alwaysOnTop })),
+    []
+  );
 
   // ---- tab actions (all persist) ----
   const addTab = useCallback((url?: string) => {
@@ -427,6 +438,20 @@ export function App() {
 
         {/* Custom window controls. */}
         <div className="flex shrink-0 items-stretch">
+          <button
+            className={
+              "inline-flex w-[46px] items-center justify-center transition-colors " +
+              (settings.alwaysOnTop
+                ? "bg-content2 text-primary"
+                : "text-foreground-500 hover:bg-content2 hover:text-foreground")
+            }
+            title={settings.alwaysOnTop ? "Always on top: on" : "Always on top"}
+            aria-label="Always on top"
+            aria-pressed={settings.alwaysOnTop}
+            onClick={toggleAlwaysOnTop}
+          >
+            <Pin size={14} className={settings.alwaysOnTop ? "fill-current" : ""} />
+          </button>
           <button
             className="inline-flex w-[46px] items-center justify-center text-foreground-500 transition-colors hover:bg-content2 hover:text-foreground"
             title="Minimize"

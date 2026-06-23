@@ -13,6 +13,7 @@ export const win = {
   toggleMaximize: () => appWindow.toggleMaximize(),
   // Routes through the CloseRequested handler, which hides to the tray.
   close: () => appWindow.close(),
+  setAlwaysOnTop: (v: boolean) => appWindow.setAlwaysOnTop(v),
 };
 
 export const api = {

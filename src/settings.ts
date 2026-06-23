@@ -18,6 +18,8 @@ export interface Settings {
   weatherLocation: string;
   /** Max downloads running at once (the queue's batch limit), 1–10. */
   maxConcurrentDownloads: number;
+  /** Keep the window above all others. */
+  alwaysOnTop: boolean;
 }
 
 const KEY = "tauri-browser.settings";
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tempUnit: defaultTempUnit(),
   weatherLocation: "",
   maxConcurrentDownloads: 3,
+  alwaysOnTop: false,
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {
