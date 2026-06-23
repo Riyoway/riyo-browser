@@ -680,6 +680,7 @@ export function App() {
             showWeather={settings.showWeather}
             showNews={settings.showNews}
             showSiteIcons={settings.showSiteIcons}
+            background={settings.homeBackground}
             onNavigate={navTo}
           />
         )}

@@ -42,6 +42,8 @@ export interface Settings {
   showSiteIcons: boolean;
   /** Default decision per website permission kind (by SITE_PERMISSIONS key). */
   sitePermissions: Record<string, PermDecision>;
+  /** New Tab (home) page background id (see backgrounds.ts). */
+  homeBackground: string;
 }
 
 const KEY = "tauri-browser.settings";
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showNews: true,
   showSiteIcons: true,
   sitePermissions: {},
+  homeBackground: "default",
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {

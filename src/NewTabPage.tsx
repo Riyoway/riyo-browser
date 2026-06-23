@@ -18,6 +18,7 @@ import {
   type Weather,
 } from "./newtabData";
 import { LocationPermission } from "./LocationPermission";
+import { backgroundUrl } from "./backgrounds";
 
 // The built-in New Tab / blank page (from the "Blank Page" design): clock,
 // greeting, engine-aware search, frequently-used sites with favicons, live
@@ -32,6 +33,8 @@ interface NewTabPageProps {
   showWeather: boolean;
   showNews: boolean;
   showSiteIcons: boolean;
+  /** Home background id (see backgrounds.ts). */
+  background: string;
   /** Open raw address-bar input in the active tab (URL or search query). */
   onNavigate: (input: string) => void;
 }
@@ -176,6 +179,7 @@ export function NewTabPage({
   showWeather,
   showNews,
   showSiteIcons,
+  background,
   onNavigate,
 }: NewTabPageProps) {
   const [now, setNow] = useState(() => new Date());
@@ -307,18 +311,32 @@ export function NewTabPage({
     saveTodos([...todos, { text: v, done: false }]);
   };
 
+  const bgUrl = backgroundUrl(background);
+
   return (
     <div
       className="ntp anim-fade absolute inset-0 z-40 overflow-auto"
       style={{
-        background: "#0a0a0a",
+        background: bgUrl ? undefined : "#0a0a0a",
+        backgroundImage: bgUrl ? `url(${bgUrl})` : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
         color: "#ededed",
         fontFamily: "'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif",
       }}
     >
+      {/* Scrim over an image background so the content stays readable. */}
+      {bgUrl && (
+        <div
+          style={{ position: "absolute", inset: 0, background: "rgba(10,10,10,0.55)", zIndex: 0, pointerEvents: "none" }}
+        />
+      )}
       {askLocation && <LocationPermission onDecide={decideLocation} />}
       <div
         style={{
+          position: "relative",
+          zIndex: 1,
           minHeight: "100%",
           padding: "64px 32px 80px",
           display: "flex",

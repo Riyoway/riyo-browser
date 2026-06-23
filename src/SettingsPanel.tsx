@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Button, Input, Select, SelectItem, Switch } from "@heroui/react";
 import {
+  Check,
   Info,
   LayoutGrid,
   Lock,
@@ -10,6 +11,7 @@ import {
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
+import { BACKGROUNDS } from "./backgrounds";
 import { PanelShell } from "./PanelShell";
 import {
   DEFAULT_HOMEPAGE,
@@ -181,6 +183,41 @@ export function SettingsPanel({
 
             {active === "newtab" && (
               <div className="space-y-4">
+                <div>
+                  <div className="mb-2 text-sm font-medium">Home background</div>
+                  <div className="flex flex-wrap gap-3">
+                    {BACKGROUNDS.map((b) => {
+                      const on = settings.homeBackground === b.id;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          title={b.label}
+                          aria-label={b.label}
+                          onClick={() => onChange({ ...settings, homeBackground: b.id })}
+                          className={
+                            "relative h-16 w-24 shrink-0 overflow-hidden rounded-medium border-2 transition-colors " +
+                            (on ? "border-primary" : "border-divider hover:border-foreground-400")
+                          }
+                          style={
+                            b.url
+                              ? { background: `url(${b.url}) center/cover` }
+                              : { background: "#0a0a0a" }
+                          }
+                        >
+                          {on && (
+                            <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <Check size={11} />
+                            </span>
+                          )}
+                          <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                            {b.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <Row label="Temperature unit">
                   <Select
                     aria-label="Temperature unit"
