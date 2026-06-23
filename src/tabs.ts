@@ -18,8 +18,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 // webview; the React `NewTabPage` overlay is shown instead (see App.tsx).
 export const NEWTAB = "about:newtab";
 
-// Tabs are per-window. The main window keeps the original key (backward compat);
-// each secondary window gets its own namespaced key so its tab list is separate.
+// Only the main window restores/persists its tab list. Secondary windows are
+// ephemeral: they always start fresh. (Restoring them by window label resurrected
+// a previous window's tabs after a restart, since the label counter resets — so a
+// brand-new window could open a site you never opened.)
 const WIN_LABEL = (() => {
   try {
     return getCurrentWindow().label;
@@ -27,7 +29,8 @@ const WIN_LABEL = (() => {
     return "main";
   }
 })();
-const KEY = WIN_LABEL === "main" ? "tauri-browser.tabs" : `tauri-browser.tabs.${WIN_LABEL}`;
+const IS_MAIN = WIN_LABEL === "main";
+const KEY = "tauri-browser.tabs";
 
 export const newId = () => "t" + Math.random().toString(36).slice(2, 10);
 
@@ -42,7 +45,7 @@ export function titleOf(url: string): string {
 
 export function loadTabs(): TabState {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = IS_MAIN ? localStorage.getItem(KEY) : null;
     if (raw) {
       const d = JSON.parse(raw);
       if (Array.isArray(d?.tabs) && d.tabs.length) {
@@ -63,6 +66,7 @@ export function loadTabs(): TabState {
 }
 
 export function persistTabs(state: TabState): TabState {
+  if (!IS_MAIN) return state; // secondary windows don't persist (see above)
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch {
