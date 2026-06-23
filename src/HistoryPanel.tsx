@@ -1,16 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Input } from "@heroui/react";
-import {
-  Globe,
-  History as HistoryIcon,
-  Search,
-  SquareArrowOutUpRight,
-  Trash2,
-  X,
-} from "lucide-react";
+import { History as HistoryIcon, Search, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import { PanelShell } from "./PanelShell";
+import { Favicon } from "./Favicon";
 import { entryKey, type HistoryEntry } from "./history";
-import { faviconUrls, hostOf } from "./newtabData";
 
 function fmtTime(ts: number): string {
   try {
@@ -44,25 +37,6 @@ function groupByDay(entries: HistoryEntry[]): { label: string; items: HistoryEnt
     cur.items.push(e);
   }
   return groups;
-}
-
-function Favicon({ url }: { url: string }) {
-  const host = hostOf(url);
-  const urls = host ? faviconUrls(host) : [];
-  const [stage, setStage] = useState(0);
-  if (!host || stage >= urls.length) {
-    return <Globe size={15} className="shrink-0 text-foreground-500" />;
-  }
-  return (
-    <img
-      src={urls[stage]}
-      alt=""
-      width={16}
-      height={16}
-      className="shrink-0 rounded-sm"
-      onError={() => setStage((s) => s + 1)}
-    />
-  );
 }
 
 function Row({

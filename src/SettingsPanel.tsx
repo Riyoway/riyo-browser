@@ -108,6 +108,12 @@ export function SettingsPanel({
               onValueChange={(v) => onChange({ ...settings, theme: v ? "dark" : "light" })}
             />
           </Row>
+          <Row label="Show bookmarks bar" description="A bar of bookmarks under the toolbar (Ctrl+Shift+B).">
+            <Switch
+              isSelected={settings.showBookmarksBar}
+              onValueChange={(v) => onChange({ ...settings, showBookmarksBar: v })}
+            />
+          </Row>
         </Section>
 
         <Section title="New Tab page">

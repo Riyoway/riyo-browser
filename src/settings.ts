@@ -20,6 +20,8 @@ export interface Settings {
   maxConcurrentDownloads: number;
   /** Keep the window above all others. */
   alwaysOnTop: boolean;
+  /** Show the bookmarks bar under the toolbar. */
+  showBookmarksBar: boolean;
 }
 
 const KEY = "tauri-browser.settings";
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weatherLocation: "",
   maxConcurrentDownloads: 3,
   alwaysOnTop: false,
+  showBookmarksBar: true,
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {

@@ -45,6 +45,7 @@ import { HistoryPanel } from "./HistoryPanel";
 import { BookmarksPanel } from "./BookmarksPanel";
 import { DownloadsPanel } from "./DownloadsPanel";
 import { DownloadsPopover } from "./DownloadsPopover";
+import { BookmarksBar } from "./BookmarksBar";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
@@ -380,6 +381,9 @@ export function App() {
       } else if (ctrl && k === "n" && !e.shiftKey) {
         e.preventDefault();
         win.newWindow().catch(() => {});
+      } else if (ctrl && e.shiftKey && k === "b") {
+        e.preventDefault();
+        setSettings((s) => saveSettings({ ...s, showBookmarksBar: !s.showBookmarksBar }));
       } else if (e.altKey && k === "arrowleft") {
         e.preventDefault();
         evalActive("back");
@@ -591,6 +595,11 @@ export function App() {
           <SettingsIcon size={17} />
         </Button>
       </div>
+
+      {/* Bookmarks bar (under the toolbar) */}
+      {settings.showBookmarksBar && (
+        <BookmarksBar bookmarks={bookmarks} onOpen={openInActiveTab} onOpenNewTab={addTab} />
+      )}
 
       {/* Content: the active webview floats over this placeholder; the New Tab
           page and panels cover it (the webview is parked while they show). */}
