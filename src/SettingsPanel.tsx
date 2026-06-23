@@ -202,7 +202,7 @@ export function SettingsPanel({
                           style={
                             b.url
                               ? { background: `url(${b.url}) center/cover` }
-                              : { background: "#0a0a0a" }
+                              : { background: b.color || "#0a0a0a" }
                           }
                         >
                           {on && (

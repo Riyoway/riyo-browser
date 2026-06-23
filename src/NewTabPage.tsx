@@ -18,7 +18,7 @@ import {
   type Weather,
 } from "./newtabData";
 import { LocationPermission } from "./LocationPermission";
-import { backgroundUrl } from "./backgrounds";
+import { backgroundInfo } from "./backgrounds";
 
 // The built-in New Tab / blank page (from the "Blank Page" design): clock,
 // greeting, engine-aware search, frequently-used sites with favicons, live
@@ -320,7 +320,9 @@ export function NewTabPage({
     saveTodos([...todos, { text: v, done: false }]);
   };
 
-  const bgUrl = backgroundUrl(background);
+  const bg = backgroundInfo(background);
+  const bgUrl = bg?.url;
+  const isLight = !!bg?.light;
   // Bake the readability scrim into the background as a gradient layer (not a
   // separate scrolling element), so image + scrim stay attached to the page and
   // cover it seamlessly at any size/scroll position.
@@ -330,13 +332,15 @@ export function NewTabPage({
     <div
       className="ntp anim-fade absolute inset-0 z-40 overflow-auto"
       style={{
-        background: bgUrl ? undefined : "#0a0a0a",
+        background: bgUrl ? undefined : bg?.color || "#0a0a0a",
         backgroundImage: bgUrl ? `${scrim}, url(${bgUrl})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         backgroundAttachment: "scroll",
-        color: "#ededed",
+        // On a light background, the text that inherits this color (clock,
+        // greeting) needs to be dark; the cards stay dark and readable as-is.
+        color: isLight ? "#1a1a1a" : "#ededed",
         fontFamily: "'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif",
       }}
     >
