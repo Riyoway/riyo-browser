@@ -12,14 +12,16 @@ export interface TabState {
   activeId: string;
 }
 
-export const HOME = "https://www.google.com/";
+// Internal URL for the New Tab / blank page. Tabs with this url have no native
+// webview; the React `NewTabPage` overlay is shown instead (see App.tsx).
+export const NEWTAB = "about:newtab";
 const KEY = "tauri-browser.tabs";
 
 export const newId = () => "t" + Math.random().toString(36).slice(2, 10);
 
 export function titleOf(url: string): string {
   try {
-    if (!url || url === "about:blank") return "New tab";
+    if (!url || url === "about:blank" || url === NEWTAB) return "New tab";
     return new URL(url).hostname.replace(/^www\./, "") || url;
   } catch {
     return url;
@@ -34,8 +36,8 @@ export function loadTabs(): TabState {
       if (Array.isArray(d?.tabs) && d.tabs.length) {
         const tabs: Tab[] = d.tabs.map((t: Partial<Tab>) => ({
           id: t.id || newId(),
-          url: t.url || HOME,
-          title: t.title || titleOf(t.url || HOME),
+          url: t.url || NEWTAB,
+          title: t.title || titleOf(t.url || NEWTAB),
         }));
         const activeId = tabs.some((t) => t.id === d.activeId) ? d.activeId : tabs[0].id;
         return { tabs, activeId };
@@ -45,7 +47,7 @@ export function loadTabs(): TabState {
     /* ignore corrupt state */
   }
   const id = newId();
-  return { tabs: [{ id, url: HOME, title: "New tab" }], activeId: id };
+  return { tabs: [{ id, url: NEWTAB, title: "New tab" }], activeId: id };
 }
 
 export function persistTabs(state: TabState): TabState {

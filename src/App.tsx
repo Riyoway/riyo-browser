@@ -17,7 +17,8 @@ import {
   X,
 } from "lucide-react";
 import { api, events, win, type TabAction } from "./ipc";
-import { loadTabs, newId, persistTabs, titleOf, type Tab, type TabState } from "./tabs";
+import { loadTabs, NEWTAB, newId, persistTabs, titleOf, type Tab, type TabState } from "./tabs";
+import { NewTabPage } from "./NewTabPage";
 import { loadSettings, saveSettings, toUrl, type Settings } from "./settings";
 import { clearHistory, loadHistory, pushHistory, type HistoryEntry } from "./history";
 import {
@@ -67,7 +68,7 @@ export function App() {
   // ---- tab actions (all persist) ----
   const addTab = useCallback((url?: string) => {
     const s = settingsRef.current;
-    const target = url ?? (s.openNewTabToHomepage ? s.homepage : "about:blank");
+    const target = url ?? (s.openNewTabToHomepage ? s.homepage : NEWTAB);
     const t: Tab = { id: newId(), url: target, title: titleOf(target) };
     setState((st) => persistTabs({ tabs: [...st.tabs, t], activeId: t.id }));
     setView("web");
@@ -82,7 +83,7 @@ export function App() {
       let activeId = s.activeId;
       if (activeId === id) activeId = (s.tabs[idx + 1] ?? s.tabs[idx - 1])?.id ?? "";
       if (tabs.length === 0) {
-        const t: Tab = { id: newId(), url: "about:blank", title: "New tab" };
+        const t: Tab = { id: newId(), url: NEWTAB, title: "New tab" };
         tabs = [t];
         activeId = t.id;
       }
@@ -110,12 +111,18 @@ export function App() {
   // new, then navigating to its url). Never runs while a panel covers the page.
   const sync = useCallback(() => {
     if (viewRef.current !== "web") return;
+    const { activeId, tabs } = stateRef.current;
+    const active = tabs.find((t) => t.id === activeId);
+    // The New Tab / blank page has no native webview — park everything and let
+    // the React overlay show instead.
+    if (!activeId || !active || active.url === NEWTAB) {
+      api.hideAll().catch(() => {});
+      return;
+    }
     const el = holderRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) return; // wait for a real layout
-    const { activeId } = stateRef.current;
-    if (!activeId) return;
     api
       .tabShow(activeId, r.left, r.top, r.width, r.height)
       .then((created) => {
@@ -151,9 +158,10 @@ export function App() {
     };
   }, [sync]);
 
-  // Reflect the active tab's url in the address bar.
+  // Reflect the active tab's url in the address bar (blank on the New Tab page).
   useEffect(() => {
-    setAddr(activeTab?.url ?? settingsRef.current.homepage);
+    const u = activeTab?.url;
+    setAddr(u && u !== NEWTAB ? u : "");
   }, [activeId, activeTab?.url]);
 
   // Events from the webviews.
@@ -172,36 +180,68 @@ export function App() {
     if (activeId) api.tabEval(activeId, action).catch(() => {});
   }, []);
 
-  const navTo = useCallback((raw: string) => {
-    const { activeId } = stateRef.current;
-    if (!activeId) return;
-    const u = toUrl(raw, settingsRef.current.searchEngine);
-    if (!u) return;
-    setView("web");
-    api.tabNavigate(activeId, u).catch(() => {});
-  }, []);
-
-  const goHome = useCallback(() => {
-    const { activeId } = stateRef.current;
-    if (!activeId) return;
-    setView("web");
-    api.tabNavigate(activeId, settingsRef.current.homepage).catch(() => {});
-  }, []);
-
-  const openUrl = useCallback(
-    (url: string) => {
-      setView("web");
+  // Navigate the active tab to a real URL. The active tab may be a New Tab page
+  // with no webview yet, so create/show it via tabShow before navigating, and
+  // optimistically update the tab so the New Tab overlay hides immediately.
+  const openInActiveTab = useCallback(
+    (u: string) => {
       const { activeId } = stateRef.current;
-      if (activeId) api.tabNavigate(activeId, url).catch(() => {});
-      else addTab(url);
+      if (!activeId) {
+        addTab(u);
+        return;
+      }
+      setView("web");
+      setState((s) =>
+        persistTabs({
+          ...s,
+          tabs: s.tabs.map((t) => (t.id === activeId ? { ...t, url: u, title: titleOf(u) } : t)),
+        })
+      );
+      const go = () => api.tabNavigate(activeId, u).catch(() => {});
+      const r = holderRef.current?.getBoundingClientRect();
+      if (r && r.width >= 1 && r.height >= 1) {
+        api.tabShow(activeId, r.left, r.top, r.width, r.height).then(go, go);
+      } else {
+        go();
+      }
     },
     [addTab]
   );
 
+  const navTo = useCallback(
+    (raw: string) => {
+      const u = toUrl(raw, settingsRef.current.searchEngine);
+      if (u) openInActiveTab(u);
+    },
+    [openInActiveTab]
+  );
+
+  // Switch the active tab to the New Tab / blank page (no webview).
+  const goToNewTab = useCallback(() => {
+    const { activeId } = stateRef.current;
+    if (!activeId) {
+      addTab(NEWTAB);
+      return;
+    }
+    setView("web");
+    setState((s) =>
+      persistTabs({
+        ...s,
+        tabs: s.tabs.map((t) => (t.id === activeId ? { ...t, url: NEWTAB, title: "New tab" } : t)),
+      })
+    );
+    api.hideAll().catch(() => {});
+  }, [addTab]);
+
+  const goHome = useCallback(() => {
+    if (settingsRef.current.homepage === NEWTAB) goToNewTab();
+    else openInActiveTab(settingsRef.current.homepage);
+  }, [goToNewTab, openInActiveTab]);
+
   const toggleCurrentBookmark = useCallback(() => {
     const s = stateRef.current;
     const t = s.tabs.find((x) => x.id === s.activeId);
-    if (!t || !t.url || t.url === "about:blank") return;
+    if (!t || !t.url || t.url === "about:blank" || t.url === NEWTAB) return;
     setBookmarks(toggleBookmark(t.url, t.title || titleOf(t.url)));
   }, []);
 
@@ -395,9 +435,13 @@ export function App() {
         </Button>
       </div>
 
-      {/* Content: the active webview floats over this placeholder; panels cover it. */}
+      {/* Content: the active webview floats over this placeholder; the New Tab
+          page and panels cover it (the webview is parked while they show). */}
       <div className="relative min-h-0 flex-1">
         <div className="absolute inset-0 bg-content1" ref={holderRef} />
+        {view === "web" && activeTab?.url === NEWTAB && (
+          <NewTabPage searchEngine={settings.searchEngine} onNavigate={navTo} />
+        )}
         {view === "settings" && (
           <SettingsPanel
             settings={settings}
@@ -411,7 +455,7 @@ export function App() {
         {view === "history" && (
           <HistoryPanel
             entries={history}
-            onOpen={openUrl}
+            onOpen={openInActiveTab}
             onClear={() => setHistory(clearHistory())}
             onClose={() => setView("web")}
           />
@@ -419,7 +463,7 @@ export function App() {
         {view === "bookmarks" && (
           <BookmarksPanel
             bookmarks={bookmarks}
-            onOpen={openUrl}
+            onOpen={openInActiveTab}
             onRemove={(url) => setBookmarks(removeBookmark(url))}
             onClose={() => setView("web")}
           />

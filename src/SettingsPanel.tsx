@@ -61,8 +61,10 @@ export function SettingsPanel({
         <Section title="General">
           <Input
             label="Homepage"
-            value={settings.homepage}
-            onValueChange={(v) => onChange({ ...settings, homepage: v })}
+            description="Leave blank to use the built-in New Tab page."
+            placeholder="New Tab page (blank)"
+            value={settings.homepage === DEFAULT_HOMEPAGE ? "" : settings.homepage}
+            onValueChange={(v) => onChange({ ...settings, homepage: v.trim() === "" ? DEFAULT_HOMEPAGE : v })}
             variant="bordered"
             endContent={
               settings.homepage !== DEFAULT_HOMEPAGE && (

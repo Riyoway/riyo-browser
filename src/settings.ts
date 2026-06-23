@@ -1,6 +1,8 @@
 // User-facing browser settings + localStorage persistence, plus the address-bar
 // "is this a URL or a search query?" logic that depends on the chosen engine.
 
+import { NEWTAB } from "./tabs";
+
 export type SearchEngine = "google" | "bing" | "duckduckgo";
 export type Theme = "dark" | "light";
 
@@ -13,7 +15,8 @@ export interface Settings {
 
 const KEY = "tauri-browser.settings";
 
-export const DEFAULT_HOMEPAGE = "https://www.google.com/";
+// Default home is the built-in New Tab / blank page.
+export const DEFAULT_HOMEPAGE = NEWTAB;
 
 export const DEFAULT_SETTINGS: Settings = {
   homepage: DEFAULT_HOMEPAGE,
