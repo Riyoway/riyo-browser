@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Input } from "@heroui/react";
 import {
   ArrowRight,
+  Bookmark as BookmarkIcon,
   ChevronLeft,
   ChevronRight,
   Download,
   EllipsisVertical,
+  History as HistoryIcon,
   Home,
   Minus,
   Pin,
@@ -144,7 +146,7 @@ export function App() {
   // Show the active tab at the placeholder bounds (creating it on about:blank if
   // new, then navigating to its url). Never runs while a panel covers the page.
   const sync = useCallback(() => {
-    if (viewRef.current !== "web" || dlPopoverRef.current || menuOpenRef.current) return;
+    if (viewRef.current !== "web") return;
     const { activeId, tabs } = stateRef.current;
     const active = tabs.find((t) => t.id === activeId);
     // The New Tab / blank page has no native webview — park everything and let
@@ -157,8 +159,13 @@ export function App() {
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) return; // wait for a real layout
+    // Shrink the webview to free a right-hand strip for the overflow menu /
+    // downloads popover, instead of hiding the whole page behind them (a native
+    // webview can't be drawn under host DOM).
+    const reserve = menuOpenRef.current ? 290 : dlPopoverRef.current ? 384 : 0;
+    const width = Math.max(200, r.width - reserve);
     api
-      .tabShow(activeId, r.left, r.top, r.width, r.height)
+      .tabShow(activeId, r.left, r.top, width, r.height)
       .then((created) => {
         if (created) {
           const t = stateRef.current.tabs.find((t) => t.id === activeId);
@@ -171,7 +178,7 @@ export function App() {
   // Show the active tab when on the web view; park everything when a panel or the
   // downloads popover is up (so that host-DOM UI isn't hidden by the webview).
   useEffect(() => {
-    if (view === "web" && !dlPopover && !menuOpen) sync();
+    if (view === "web") sync();
     else api.hideAll().catch(() => {});
   }, [view, activeId, sync, dlPopover, menuOpen]);
 
@@ -592,6 +599,12 @@ export function App() {
 
         <div className="mx-0.5 h-6 w-px shrink-0 bg-divider" />
 
+        <Button isIconOnly variant="light" size="sm" title="Bookmarks" aria-label="Bookmarks" onPress={() => openPanel("bookmarks")}>
+          <BookmarkIcon size={17} />
+        </Button>
+        <Button isIconOnly variant="light" size="sm" title="History" aria-label="History" onPress={() => openPanel("history")}>
+          <HistoryIcon size={17} />
+        </Button>
         <Badge
           color="primary"
           size="sm"
@@ -713,9 +726,6 @@ export function App() {
                 onClose={() => setMenuOpen(false)}
                 onNewTab={() => addTab()}
                 onNewWindow={() => win.newWindow().catch(() => {})}
-                onBookmarks={() => openPanel("bookmarks")}
-                onHistory={() => openPanel("history")}
-                onDownloads={() => setDlPopover(true)}
                 onSettings={() => openPanel("settings")}
                 onToggleBookmarksBar={() =>
                   setSettings((s) => saveSettings({ ...s, showBookmarksBar: !s.showBookmarksBar }))

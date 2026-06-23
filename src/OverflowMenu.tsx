@@ -1,15 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  AppWindow,
-  Bookmark,
-  Check,
-  Download,
-  History,
-  PanelTop,
-  Pin,
-  Plus,
-  Settings,
-} from "lucide-react";
+import { AppWindow, Check, PanelTop, Pin, Plus, Settings } from "lucide-react";
 
 function Item({
   icon,
@@ -50,9 +40,6 @@ export function OverflowMenu({
   onClose,
   onNewTab,
   onNewWindow,
-  onBookmarks,
-  onHistory,
-  onDownloads,
   onSettings,
   onToggleBookmarksBar,
   onToggleAlwaysOnTop,
@@ -62,9 +49,6 @@ export function OverflowMenu({
   onClose: () => void;
   onNewTab: () => void;
   onNewWindow: () => void;
-  onBookmarks: () => void;
-  onHistory: () => void;
-  onDownloads: () => void;
   onSettings: () => void;
   onToggleBookmarksBar: () => void;
   onToggleAlwaysOnTop: () => void;
@@ -77,10 +61,6 @@ export function OverflowMenu({
     <div className="anim-pop w-[260px] overflow-hidden rounded-large border border-divider bg-content1 p-1.5 shadow-2xl">
       <Item icon={<Plus size={16} />} label="New tab" shortcut="Ctrl+T" onClick={run(onNewTab)} />
       <Item icon={<AppWindow size={16} />} label="New window" shortcut="Ctrl+N" onClick={run(onNewWindow)} />
-      <Sep />
-      <Item icon={<Bookmark size={16} />} label="Bookmarks" onClick={run(onBookmarks)} />
-      <Item icon={<History size={16} />} label="History" onClick={run(onHistory)} />
-      <Item icon={<Download size={16} />} label="Downloads" onClick={run(onDownloads)} />
       <Sep />
       <Item
         icon={<PanelTop size={16} />}
