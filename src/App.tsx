@@ -48,6 +48,7 @@ import { DownloadsPanel } from "./DownloadsPanel";
 import { DownloadsPopover } from "./DownloadsPopover";
 import { BookmarksBar } from "./BookmarksBar";
 import { MediaPlayer, type MediaState } from "./MediaPlayer";
+import { Favicon } from "./Favicon";
 import { OverflowMenu } from "./OverflowMenu";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
@@ -502,9 +503,9 @@ export function App() {
             <div
               key={t.id}
               // All tabs share one width: 180px while they fit, shrinking together
-              // (uniformly, down to a 52px floor) only when the strip overflows.
+              // (uniformly, down to a 72px floor) only when the strip overflows.
               className={
-                "group flex min-w-[52px] max-w-[180px] flex-[0_1_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
+                "group flex min-w-[72px] max-w-[180px] flex-[0_1_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
                 (t.id === activeId
                   ? "bg-background text-foreground"
                   : "text-foreground-500 hover:bg-content2 hover:text-foreground")
@@ -518,6 +519,7 @@ export function App() {
               }}
               title={t.title || t.url}
             >
+              {settings.showSiteIcons && t.url !== NEWTAB && <Favicon url={t.url} size={15} />}
               <span className="min-w-0 flex-1 overflow-hidden text-ellipsis">{t.title || t.url}</span>
               <span
                 className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded opacity-60 transition hover:bg-content3 hover:opacity-100"
