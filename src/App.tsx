@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Badge, Button, Input } from "@heroui/react";
 import {
   ArrowRight,
@@ -180,28 +180,59 @@ export function App() {
   const geomRef = useRef<{ x: number; y: number; scale: number } | null>(null);
   const overStripRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Snapshot taken at dragstart: tab ids + their home left edges (CSS px), the
+  // dragged index, tab width, and where in the tab the cursor grabbed. During the
+  // drag we move tabs purely with transforms off this snapshot (no array changes,
+  // so no jumps), then commit the new order on drop.
+  const dragInfoRef = useRef<{ ids: string[]; lefts: number[]; width: number; from: number; grab: number } | null>(null);
+  const lastInsRef = useRef(-1);
 
-  // Move the dragged tab to the slot under client-x `cx` (live, while dragging).
-  const reorderToCursor = useCallback((cx: number) => {
-    const id = dragIdRef.current;
-    const els = stripRef.current?.querySelectorAll<HTMLElement>("[data-tabid]");
-    if (!id || !els || !els.length) return;
-    let index = 0; // # of non-dragged tabs whose center is left of the cursor
-    els.forEach((el) => {
-      if (el.dataset.tabid === id) return;
-      const r = el.getBoundingClientRect();
-      if (cx > r.left + r.width / 2) index++;
+  const tabEl = (id: string) => stripRef.current?.querySelector<HTMLElement>(`[data-tabid="${CSS.escape(id)}"]`) ?? null;
+
+  // Lay the strip out for cursor client-x `cx`: the dragged tab follows the cursor;
+  // the others slide to open a gap at the insertion point. Returns that index.
+  const layoutDrag = useCallback((cx: number, overStrip: boolean) => {
+    const info = dragInfoRef.current;
+    if (!info) return -1;
+    const draggedId = info.ids[info.from];
+    const dEl = tabEl(draggedId);
+    if (dEl) {
+      const homeCenter = info.lefts[info.from] + info.width / 2;
+      dEl.style.transform = `translateX(${cx - info.grab - homeCenter}px)`;
+    }
+    let ins = info.from;
+    if (overStrip) {
+      ins = 0;
+      info.ids.forEach((_, i) => {
+        if (i !== info.from && cx > info.lefts[i] + info.width / 2) ins++;
+      });
+    }
+    const others = info.ids.filter((_, i) => i !== info.from);
+    const final = [...others.slice(0, ins), draggedId, ...others.slice(ins)];
+    info.ids.forEach((id, i) => {
+      if (i === info.from) return;
+      const el = tabEl(id);
+      if (el) el.style.transform = `translateX(${info.lefts[final.indexOf(id)] - info.lefts[i]}px)`;
     });
-    setState((s) => {
-      const from = s.tabs.findIndex((t) => t.id === id);
-      if (from === -1) return s;
-      const tabs = [...s.tabs];
-      const [moved] = tabs.splice(from, 1);
-      tabs.splice(index, 0, moved);
-      if (tabs.every((t, i) => t.id === s.tabs[i].id)) return s; // unchanged
-      return persistTabs({ ...s, tabs });
+    return ins;
+  }, []);
+
+  const pendingDropRef = useRef(false);
+  const clearDragStyles = useCallback(() => {
+    stripRef.current?.querySelectorAll<HTMLElement>("[data-tabid]").forEach((el) => {
+      el.style.transform = "";
+      el.style.transition = "";
     });
   }, []);
+
+  // After a drop commits the new order, clear the leftover transforms before the
+  // browser paints (useLayoutEffect) so the tabs don't flash back to the old order.
+  useLayoutEffect(() => {
+    if (pendingDropRef.current) {
+      pendingDropRef.current = false;
+      clearDragStyles();
+    }
+  });
 
   const stopDragPoll = useCallback(() => {
     if (pollRef.current) {
@@ -228,24 +259,43 @@ export function App() {
           const clientY = (cy - g.y) / g.scale;
           const sr = strip.getBoundingClientRect();
           overStripRef.current =
-            clientX >= sr.left - 6 && clientX <= sr.right + 6 && clientY >= sr.top - 10 && clientY <= sr.bottom + 28;
-          if (overStripRef.current) reorderToCursor(clientX);
+            clientX >= sr.left - 8 && clientX <= sr.right + 40 && clientY >= sr.top - 12 && clientY <= sr.bottom + 30;
+          lastInsRef.current = layoutDrag(clientX, overStripRef.current);
         })
         .catch(() => {});
-    }, 50);
-  }, [reorderToCursor, stopDragPoll]);
+    }, 30);
+  }, [layoutDrag, stopDragPoll]);
 
-  // On dragend: cursor last over the strip → reorder kept. Otherwise route by the
-  // native cursor vs each window's bounds: over another window → move there;
+  // On dragend: cursor last over the strip → commit the new order. Otherwise route
+  // by the native cursor vs each window's bounds: over another window → move there;
   // within this window (page area) → keep; outside every window → new window.
   const onTabDragEnd = useCallback(
     (tab: Tab) => {
       stopDragPoll();
-      dragIdRef.current = null;
-      setDragId(null);
       const wasOverStrip = overStripRef.current;
+      const ins = lastInsRef.current;
+      const info = dragInfoRef.current;
+      dragInfoRef.current = null;
+      dragIdRef.current = null;
       overStripRef.current = false;
-      if (wasOverStrip) return; // reordered within the strip
+      setDragId(null);
+
+      if (wasOverStrip) {
+        // Commit the new order. If it actually changed, let the layout effect clear
+        // the transforms after the re-render (no flash); otherwise clear them now.
+        const cur = stateRef.current.tabs;
+        const others = cur.filter((x) => x.id !== tab.id);
+        const moved = cur.find((x) => x.id === tab.id);
+        const next = info && ins >= 0 && moved ? [...others.slice(0, ins), moved, ...others.slice(ins)] : cur;
+        if (!next.every((x, i) => x.id === cur[i]?.id)) {
+          pendingDropRef.current = true;
+          setState((s) => persistTabs({ ...s, tabs: next }));
+        } else {
+          clearDragStyles();
+        }
+        return; // reordered within the strip
+      }
+      clearDragStyles();
       Promise.all([win.cursorPosition(), win.windowBounds()])
         .then(([[cx, cy], bounds]) => {
           const inside = (b: { x: number; y: number; w: number; h: number }) =>
@@ -264,7 +314,7 @@ export function App() {
         })
         .catch(() => {});
     },
-    [closeTab, stopDragPoll]
+    [clearDragStyles, closeTab, stopDragPoll]
   );
 
   // Stop any in-flight drag poll if the component unmounts.
@@ -614,13 +664,31 @@ export function App() {
                 (t.id === activeId
                   ? "bg-background text-foreground"
                   : "text-foreground-500 hover:bg-content2 hover:text-foreground") +
-                (t.id === dragId ? " opacity-80 ring-2 ring-primary ring-inset" : "")
+                (t.id === dragId ? " relative z-50 bg-content2 shadow-lg ring-2 ring-primary ring-inset" : "")
               }
               draggable
               onDragStart={(e) => {
+                const strip = stripRef.current;
+                if (!strip) return;
+                const els = Array.from(strip.querySelectorAll<HTMLElement>("[data-tabid]"));
+                const ids = els.map((el) => el.dataset.tabid as string);
+                const lefts = els.map((el) => el.getBoundingClientRect().left);
+                const from = ids.indexOf(t.id);
+                const rect = els[from]?.getBoundingClientRect();
+                const width = rect?.width ?? 180;
+                // Where in the tab the cursor grabbed (clientX is reliable at start);
+                // if it's bogus (outside the tab), just center the tab on the cursor.
+                let grab = rect ? e.clientX - (rect.left + width / 2) : 0;
+                if (Math.abs(grab) > width / 2) grab = 0;
+                dragInfoRef.current = { ids, lefts, width, from, grab };
+                lastInsRef.current = from;
                 dragIdRef.current = t.id;
                 overStripRef.current = true;
                 setDragId(t.id);
+                // Dragged tab follows the cursor instantly; the rest slide smoothly.
+                els.forEach((el) => {
+                  el.style.transition = el.dataset.tabid === t.id ? "none" : "transform 0.16s ease";
+                });
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("text/plain", t.url);
                 startDragPoll();
