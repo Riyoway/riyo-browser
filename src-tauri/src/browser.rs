@@ -58,6 +58,12 @@ struct ShortcutPayload {
     arg: String,
 }
 
+#[derive(Clone, Serialize)]
+struct TitlePayload {
+    id: String,
+    title: String,
+}
+
 /// Injected at document-start into every tab:
 ///  0. restyle the page's native scrollbars to match the app (custom thumb).
 ///  1. ctrl/middle-click on a link → open it in a new tab (`?u=`).
@@ -102,6 +108,40 @@ const TAB_JS: &str = r#"
       else if (ctrl && k === 'n' && !e.shiftKey) cmd = 'newwindow';
       if (cmd) { e.preventDefault(); e.stopPropagation(); sig('cmd=' + cmd); }
     }, true);
+
+    // Report the page title to the app so the tab strip can show it. Sent after
+    // load and whenever <title> changes (debounced + deduped) over the same
+    // sentinel channel; a fresh page falls back to its host name until then.
+    var lastTitle = null, titleTimer = null, observedTitleEl = null;
+    function reportTitle() {
+      try {
+        var t = (document.title || '').slice(0, 300);
+        if (t === lastTitle) return;
+        lastTitle = t;
+        sig('cmd=title&q=' + encodeURIComponent(t));
+      } catch (e) {}
+    }
+    function scheduleTitle() { if (titleTimer) clearTimeout(titleTimer); titleTimer = setTimeout(reportTitle, 200); }
+    var titleObserver = new MutationObserver(scheduleTitle);
+    function watchTitle() {
+      try {
+        var el = document.querySelector('title');
+        if (el && el !== observedTitleEl) {
+          observedTitleEl = el;
+          titleObserver.disconnect();
+          titleObserver.observe(el, { childList: true, characterData: true, subtree: true });
+        }
+      } catch (e) {}
+    }
+    document.addEventListener('DOMContentLoaded', function () { watchTitle(); scheduleTitle(); });
+    window.addEventListener('load', function () { watchTitle(); scheduleTitle(); });
+    window.addEventListener('pageshow', scheduleTitle);
+    try {
+      // Catch the <title> being added or swapped out (SPAs), then (re)watch it.
+      var headObserver = new MutationObserver(function () { watchTitle(); scheduleTitle(); });
+      var hroot = document.head || document.documentElement;
+      if (hroot) headObserver.observe(hroot, { childList: true, subtree: true });
+    } catch (e) {}
 
     // Custom in-page context menu (replaces the engine's native one). Bubble
     // phase + defaultPrevented check so sites with their own menus keep theirs.
@@ -303,18 +343,27 @@ pub async fn browser_tab_show(
                         .find(|(k, _)| k == "q")
                         .map(|(_, v)| v.to_string())
                         .unwrap_or_default();
-                    // These actions target the host chrome, so move OS keyboard
-                    // focus back from the page webview to this window's React webview.
-                    if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
-                        if let Some(w) = app2.get_webview_window(&target) {
-                            let _ = w.set_focus();
+                    if cmd == "title" {
+                        // Page title for the tab strip — data, not a user action.
+                        let _ = app2.emit_to(
+                            &target,
+                            "browser-title",
+                            TitlePayload { id: id2.clone(), title: arg },
+                        );
+                    } else {
+                        // These actions target the host chrome, so move OS keyboard
+                        // focus back from the page webview to this window's React webview.
+                        if cmd == "newtab" || cmd == "focusurl" || cmd == "settings" {
+                            if let Some(w) = app2.get_webview_window(&target) {
+                                let _ = w.set_focus();
+                            }
                         }
+                        let _ = app2.emit_to(
+                            &target,
+                            "browser-shortcut",
+                            ShortcutPayload { id: id2.clone(), cmd, arg },
+                        );
                     }
-                    let _ = app2.emit_to(
-                        &target,
-                        "browser-shortcut",
-                        ShortcutPayload { id: id2.clone(), cmd, arg },
-                    );
                 }
                 return false; // cancel — keep the current page
             }

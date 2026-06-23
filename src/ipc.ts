@@ -91,6 +91,9 @@ export const events = {
   /** Ctrl/middle-click on a link asked to open a url in a new tab. */
   onNewTab: (cb: (url: string) => void): Promise<UnlistenFn> =>
     appWindow.listen<string>("browser-new-tab", (e) => cb(e.payload)),
+  /** A tab page reported its document title (for the tab strip). */
+  onTitle: (cb: (e: { id: string; title: string }) => void): Promise<UnlistenFn> =>
+    appWindow.listen<{ id: string; title: string }>("browser-title", (e) => cb(e.payload)),
   /** The window was restored from the tray; recreate the torn-down active tab.
    *  Broadcast (not per-window), so this stays a global listener. */
   onMainShown: (cb: () => void): Promise<UnlistenFn> =>

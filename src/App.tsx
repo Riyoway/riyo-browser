@@ -150,6 +150,17 @@ export function App() {
     setHistory(pushHistory(url, titleOf(url)));
   }, []);
 
+  // The page reported its real <title>; show it on the tab (ignore blanks).
+  const setTabTitle = useCallback((id: string, title: string) => {
+    const t = title.trim();
+    if (!t) return;
+    setState((s) => {
+      const tab = s.tabs.find((x) => x.id === id);
+      if (!tab || tab.title === t) return s;
+      return persistTabs({ ...s, tabs: s.tabs.map((x) => (x.id === id ? { ...x, title: t } : x)) });
+    });
+  }, []);
+
   // ---- webview placement ----
   // Show the active tab at the placeholder bounds (creating it on about:blank if
   // new, then navigating to its url). Never runs while a panel covers the page.
@@ -226,6 +237,7 @@ export function App() {
       p.then((f) => (disposed ? f() : uns.push(f))).catch(() => {});
     track(events.onNav((e) => setTabUrl(e.id, e.url)));
     track(events.onNewTab((url) => addTab(url)));
+    track(events.onTitle((e) => setTabTitle(e.id, e.title)));
     track(events.onMainShown(() => sync()));
     // Shortcuts forwarded from a focused tab page (the host keydown listener
     // can't see keys while a tab webview has focus).
@@ -261,7 +273,7 @@ export function App() {
       disposed = true;
       uns.forEach((f) => f());
     };
-  }, [addTab, closeTab, setTabUrl, sync]);
+  }, [addTab, closeTab, setTabUrl, setTabTitle, sync]);
 
   // Download manager: seed the list, push the persisted batch limit, and keep
   // the list live from the backend (full snapshot on change + byte progress).
