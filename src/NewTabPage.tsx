@@ -29,6 +29,9 @@ interface NewTabPageProps {
   searchEngine: SearchEngine;
   tempUnit: TempUnit;
   weatherLocation: string;
+  showWeather: boolean;
+  showNews: boolean;
+  showSiteIcons: boolean;
   /** Open raw address-bar input in the active tab (URL or search query). */
   onNavigate: (input: string) => void;
 }
@@ -166,7 +169,15 @@ const cardLabel: CSSProperties = {
 };
 const muted: CSSProperties = { fontSize: 13, color: "#6a6a6a", padding: "16px 0" };
 
-export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate }: NewTabPageProps) {
+export function NewTabPage({
+  searchEngine,
+  tempUnit,
+  weatherLocation,
+  showWeather,
+  showNews,
+  showSiteIcons,
+  onNavigate,
+}: NewTabPageProps) {
   const [now, setNow] = useState(() => new Date());
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<NewsCategory>("Top");
@@ -181,7 +192,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
   // Location consent for auto weather ("session" is allow-once, not persisted).
   const [perm, setPerm] = useState<LocPerm | "session" | null>(() => getLocPerm());
   const autoLocation = !weatherLocation.trim();
-  const askLocation = autoLocation && perm === null;
+  const askLocation = showWeather && autoLocation && perm === null;
   const allowIp = !autoLocation || perm === "allow" || perm === "session";
 
   const [newsByCat, setNewsByCat] = useState<Record<string, NewsItem[]>>(() => {
@@ -208,7 +219,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
   // Weather: wait for location consent (auto mode), then use a fresh cache as-is
   // or fetch and refresh.
   useEffect(() => {
-    if (askLocation) return; // waiting on the consent dialog
+    if (!showWeather || askLocation) return; // off, or waiting on the consent dialog
     let alive = true;
     setWeatherErr(false);
     const fresh = cachedWeather(weatherLocation, tempUnit);
@@ -229,7 +240,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
     return () => {
       alive = false;
     };
-  }, [tempUnit, weatherLocation, askLocation, allowIp]);
+  }, [tempUnit, weatherLocation, askLocation, allowIp, showWeather]);
 
   const decideLocation = (d: "allow" | "session" | "block") => {
     if (d === "allow") setLocPerm("allow");
@@ -239,6 +250,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
 
   // News: use a fresh cache as-is; otherwise fetch the feed via the proxy.
   useEffect(() => {
+    if (!showNews) return;
     let alive = true;
     setNewsErr(false);
     const cached = cachedNews(category);
@@ -256,7 +268,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
     return () => {
       alive = false;
     };
-  }, [category]);
+  }, [category, showNews]);
 
   const saveTodos = (next: Todo[]) => {
     try {
@@ -397,7 +409,13 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
                   justifyContent: "center",
                 }}
               >
-                <Favicon host={s.host} mono={(s.name[0] || "?").toUpperCase()} />
+                {showSiteIcons ? (
+                  <Favicon host={s.host} mono={(s.name[0] || "?").toUpperCase()} />
+                ) : (
+                  <span style={{ fontSize: 20, fontWeight: 500, color: "#d4d4d4" }}>
+                    {(s.name[0] || "?").toUpperCase()}
+                  </span>
+                )}
               </div>
               <span style={{ fontSize: 12, color: "#8a8a8a", maxWidth: 82, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
             </button>
@@ -405,6 +423,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
         </div>
 
         {/* Weather */}
+        {showWeather && (
         <div style={{ ...card, width: "100%", maxWidth: 1120, marginTop: 40, padding: "22px 26px" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
             <span style={cardLabel}>Weather</span>
@@ -439,10 +458,12 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
             </div>
           )}
         </div>
+        )}
 
         {/* News + Calendar + To-do */}
-        <div style={{ width: "100%", maxWidth: 1120, marginTop: 24, display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 24, alignItems: "start" }}>
+        <div style={{ width: "100%", maxWidth: 1120, marginTop: 24, display: "grid", gridTemplateColumns: showNews ? "1.5fr 1fr" : "1fr", gap: 24, alignItems: "start" }}>
           {/* News */}
+          {showNews && (
           <div style={{ ...card, padding: "24px 26px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <span style={cardLabel}>News</span>
@@ -501,6 +522,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
               )}
             </div>
           </div>
+          )}
 
           {/* Calendar + To-do */}
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>

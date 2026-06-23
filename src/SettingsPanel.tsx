@@ -3,6 +3,7 @@ import { Button, Input, Select, SelectItem, Switch } from "@heroui/react";
 import {
   Info,
   LayoutGrid,
+  Lock,
   Palette,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -17,19 +18,26 @@ import {
   type Settings,
   type TempUnit,
 } from "./settings";
-import { clearLocPerm } from "./newtabData";
+import { clearLocPerm, getLocPerm, setLocPerm } from "./newtabData";
 
 const ENGINES: SearchEngine[] = ["google", "bing", "duckduckgo"];
 
-type CatKey = "general" | "appearance" | "newtab" | "privacy" | "about";
+type CatKey = "general" | "appearance" | "newtab" | "permissions" | "privacy" | "about";
 
 const CATEGORIES: { key: CatKey; label: string; icon: typeof Info }[] = [
   { key: "general", label: "General", icon: SlidersHorizontal },
   { key: "appearance", label: "Appearance", icon: Palette },
   { key: "newtab", label: "New Tab", icon: LayoutGrid },
+  { key: "permissions", label: "Permissions", icon: Lock },
   { key: "privacy", label: "Privacy & data", icon: ShieldCheck },
   { key: "about", label: "About", icon: Info },
 ];
+
+const LOC_LABEL: Record<string, string> = {
+  ask: "Ask each time",
+  allow: "Allow",
+  block: "Block",
+};
 
 function Row({
   label,
@@ -68,6 +76,15 @@ export function SettingsPanel({
 }) {
   const [active, setActive] = useState<CatKey>("general");
   const title = CATEGORIES.find((c) => c.key === active)?.label ?? "";
+
+  // Location permission lives in its own store (consumed by the New Tab page).
+  const [loc, setLoc] = useState<string>(() => getLocPerm() ?? "ask");
+  const setLocation = (v: string) => {
+    setLoc(v);
+    if (v === "allow") setLocPerm("allow");
+    else if (v === "block") setLocPerm("block");
+    else clearLocPerm();
+  };
 
   return (
     <PanelShell title="Settings" icon={<SettingsIcon size={20} />} onClose={onClose}>
@@ -200,6 +217,59 @@ export function SettingsPanel({
               </div>
             )}
 
+            {active === "permissions" && (
+              <div className="space-y-4">
+                <Row
+                  label="Location"
+                  description="For the New Tab weather (approximate city by IP, never the GPS prompt)."
+                >
+                  <Select
+                    aria-label="Location permission"
+                    className="w-44"
+                    size="sm"
+                    variant="bordered"
+                    selectedKeys={[loc]}
+                    disallowEmptySelection
+                    onSelectionChange={(keys) => {
+                      const v = Array.from(keys)[0] as string | undefined;
+                      if (v) setLocation(v);
+                    }}
+                  >
+                    {(["ask", "allow", "block"] as const).map((k) => (
+                      <SelectItem key={k}>{LOC_LABEL[k]}</SelectItem>
+                    ))}
+                  </Select>
+                </Row>
+
+                <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-foreground-500">
+                  New Tab page content
+                </div>
+                <Row label="Weather" description="Fetch local weather from Open-Meteo.">
+                  <Switch
+                    isSelected={settings.showWeather}
+                    onValueChange={(v) => onChange({ ...settings, showWeather: v })}
+                  />
+                </Row>
+                <Row label="News" description="Fetch headlines and thumbnails from BBC.">
+                  <Switch
+                    isSelected={settings.showNews}
+                    onValueChange={(v) => onChange({ ...settings, showNews: v })}
+                  />
+                </Row>
+                <Row label="Site icons" description="Load favicons from DuckDuckGo.">
+                  <Switch
+                    isSelected={settings.showSiteIcons}
+                    onValueChange={(v) => onChange({ ...settings, showSiteIcons: v })}
+                  />
+                </Row>
+
+                <div className="rounded-large border border-divider bg-content1 p-3 text-xs text-foreground-500">
+                  Permission prompts from the websites you visit (camera, microphone, notifications)
+                  are still shown by the engine itself.
+                </div>
+              </div>
+            )}
+
             {active === "privacy" && (
               <div className="space-y-4">
                 <div className="flex items-start gap-3 rounded-large border border-divider bg-content1 p-4">
@@ -213,11 +283,6 @@ export function SettingsPanel({
                     (BBC), and site icons (DuckDuckGo) from those third parties.
                   </div>
                 </div>
-                <Row label="Location for weather" description="Re-ask whether to use your approximate (IP) location.">
-                  <Button size="sm" variant="flat" onPress={() => clearLocPerm()}>
-                    Reset
-                  </Button>
-                </Row>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="flat" startContent={<Trash2 size={16} />} onPress={onClearHistory}>
                     Clear history

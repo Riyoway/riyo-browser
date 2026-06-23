@@ -657,6 +657,9 @@ export function App() {
             searchEngine={settings.searchEngine}
             tempUnit={settings.tempUnit}
             weatherLocation={settings.weatherLocation}
+            showWeather={settings.showWeather}
+            showNews={settings.showNews}
+            showSiteIcons={settings.showSiteIcons}
             onNavigate={navTo}
           />
         )}

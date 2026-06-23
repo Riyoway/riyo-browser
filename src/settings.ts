@@ -22,6 +22,12 @@ export interface Settings {
   alwaysOnTop: boolean;
   /** Show the bookmarks bar under the toolbar. */
   showBookmarksBar: boolean;
+  /** New Tab page: fetch live weather (Open-Meteo). */
+  showWeather: boolean;
+  /** New Tab page: fetch live news (BBC RSS via the proxy). */
+  showNews: boolean;
+  /** New Tab page: load site icons / favicons (DuckDuckGo). */
+  showSiteIcons: boolean;
 }
 
 const KEY = "tauri-browser.settings";
@@ -50,6 +56,9 @@ export const DEFAULT_SETTINGS: Settings = {
   maxConcurrentDownloads: 3,
   alwaysOnTop: false,
   showBookmarksBar: true,
+  showWeather: true,
+  showNews: true,
+  showSiteIcons: true,
 };
 
 const SEARCH_URLS: Record<SearchEngine, string> = {
