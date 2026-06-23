@@ -53,15 +53,23 @@ struct ShortcutPayload {
     cmd: String,
 }
 
-/// Injected at document-start into every tab. Two jobs, both via the same
-/// sentinel-navigation channel (`newtab.local`) that `on_navigation` intercepts,
-/// since a real page→app channel isn't available for remote pages:
+/// Injected at document-start into every tab:
+///  0. restyle the page's native scrollbars to match the app (custom thumb).
 ///  1. ctrl/middle-click on a link → open it in a new tab (`?u=`).
 ///  2. browser shortcuts that the page would otherwise swallow → forward to the
 ///     app (`?cmd=`) so Ctrl+T/W/L/, work even while the page has focus. (Ctrl+R,
 ///     F5 and Alt+←/→ are handled natively by the engine in-page.)
+///
+/// (1) and (2) use the `newtab.local` sentinel-navigation channel that
+/// `on_navigation` intercepts, since a real page→app channel isn't available for
+/// remote pages.
 const TAB_JS: &str = r#"
 (function () {
+  try {
+    var s = document.createElement('style');
+    s.textContent = '::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:rgba(128,128,128,.45);border-radius:8px;border:3px solid transparent;background-clip:content-box}::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.7);background-clip:content-box}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}';
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
   try {
     function sig(q) {
       try { window.location.href = 'https://newtab.local/?' + q; } catch (e) {}

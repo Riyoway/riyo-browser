@@ -33,21 +33,31 @@ button:focus-visible,
   outline: none !important;
 }
 
-/* New Tab page: custom scrollbar + hover states (inline styles can't do :hover). */
-.ntp ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+/* ---- Custom scrollbars + selection: replace the engine's native UI everywhere
+   in the host chrome (panels, New Tab, etc.). Tab pages get the same via an
+   injected stylesheet (see browser::TAB_JS). ---- */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
 }
-.ntp ::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 5px;
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.45);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
-.ntp ::-webkit-scrollbar-thumb:hover {
-  background: #333;
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.7);
+  background-clip: content-box;
 }
-.ntp ::-webkit-scrollbar-track {
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background: transparent;
 }
+::selection {
+  background: rgba(99, 102, 241, 0.4);
+}
+
 .ntp input::placeholder {
   color: #5a5a5a;
 }
