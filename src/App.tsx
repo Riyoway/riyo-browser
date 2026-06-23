@@ -53,21 +53,6 @@ import { OverflowMenu } from "./OverflowMenu";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
-// A solid, legible drag image for a tab (the default ghost is near-invisible for a
-// transparent inactive tab). Lives off-screen just long enough to be snapshotted.
-function makeTabDragImage(label: string): HTMLElement {
-  const el = document.createElement("div");
-  el.textContent = label;
-  el.style.cssText =
-    "position:fixed;top:-1000px;left:-1000px;max-width:200px;overflow:hidden;text-overflow:ellipsis;" +
-    "white-space:nowrap;padding:7px 14px;border-radius:9px;background:#26262e;color:#ededed;" +
-    "font:12.5px 'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;" +
-    "box-shadow:0 6px 20px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.1)";
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 0);
-  return el;
-}
-
 export function App() {
   const [{ tabs, activeId }, setState] = useState<TabState>(loadTabs);
   const [settings, setSettings] = useState<Settings>(loadSettings);
@@ -184,6 +169,10 @@ export function App() {
   }, []);
 
   // ---- tab drag: reorder within the strip; tear off / move across windows ----
+  // Set true when a drag drops onto the tab strip itself — the reliable signal
+  // for "this was a reorder" that needs no (DPI-fragile) coordinates.
+  const droppedInStripRef = useRef(false);
+
   const reorderTab = useCallback((dragId: string, overId: string) => {
     if (dragId === overId) return;
     setState((s) => {
@@ -197,14 +186,15 @@ export function App() {
     });
   }, []);
 
-  // On drop: read the real cursor position natively (physical px) and compare to
-  // every window's physical bounds — inside this window → keep (reorder already
-  // applied); over another window → move the tab there; outside every window →
-  // tear off to a new window. (Native cursor + physical bounds avoid the webview's
-  // unreliable drag coordinates and any DPI mismatch.)
+  // On drop: a drop on the strip is a reorder (already applied live) — keep it.
+  // Otherwise read the real cursor position natively (physical px) and compare to
+  // every window's physical bounds: inside this window → keep; over another window
+  // → move the tab there; outside every window → tear off to a new window. (Native
+  // cursor + physical bounds avoid the webview's unreliable drag coordinates.)
   const onTabDragEnd = useCallback(
     (tab: Tab) => {
       setDragId(null);
+      if (droppedInStripRef.current) return; // reordered within the strip
       Promise.all([win.cursorPosition(), win.windowBounds()])
         .then(([[cx, cy], bounds]) => {
           const inside = (b: { x: number; y: number; w: number; h: number }) =>
@@ -553,6 +543,17 @@ export function App() {
             const el = e.currentTarget;
             if (el.scrollWidth > el.clientWidth) el.scrollLeft += e.deltaY + e.deltaX;
           }}
+          // Make the whole strip a drop target so a dropped tab reliably registers
+          // as a reorder (no coordinates needed) — see droppedInStripRef.
+          onDragOver={(e) => {
+            if (dragId) e.preventDefault();
+          }}
+          onDrop={(e) => {
+            if (dragId) {
+              e.preventDefault();
+              droppedInStripRef.current = true;
+            }
+          }}
         >
           {tabs.map((t) => (
             <div
@@ -564,14 +565,14 @@ export function App() {
                 (t.id === activeId
                   ? "bg-background text-foreground"
                   : "text-foreground-500 hover:bg-content2 hover:text-foreground") +
-                (t.id === dragId ? " opacity-40" : "")
+                (t.id === dragId ? " opacity-80 ring-2 ring-primary ring-inset" : "")
               }
               draggable
               onDragStart={(e) => {
                 setDragId(t.id);
+                droppedInStripRef.current = false;
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("text/plain", t.url);
-                e.dataTransfer.setDragImage(makeTabDragImage(t.title || titleOf(t.url)), 24, 18);
               }}
               onDragOver={(e) => {
                 e.preventDefault();
