@@ -20,7 +20,6 @@ import {
   type Settings,
   type TempUnit,
 } from "./settings";
-import { clearLocPerm, getLocPerm, setLocPerm } from "./newtabData";
 
 const ENGINES: SearchEngine[] = ["google", "bing", "duckduckgo"];
 
@@ -35,7 +34,7 @@ const CATEGORIES: { key: CatKey; label: string; icon: typeof Info }[] = [
   { key: "about", label: "About", icon: Info },
 ];
 
-const LOC_LABEL: Record<string, string> = {
+const PERM_LABEL: Record<string, string> = {
   ask: "Ask each time",
   allow: "Allow",
   block: "Block",
@@ -78,15 +77,6 @@ export function SettingsPanel({
 }) {
   const [active, setActive] = useState<CatKey>("general");
   const title = CATEGORIES.find((c) => c.key === active)?.label ?? "";
-
-  // Location permission lives in its own store (consumed by the New Tab page).
-  const [loc, setLoc] = useState<string>(() => getLocPerm() ?? "ask");
-  const setLocation = (v: string) => {
-    setLoc(v);
-    if (v === "allow") setLocPerm("allow");
-    else if (v === "block") setLocPerm("block");
-    else clearLocPerm();
-  };
 
   return (
     <PanelShell title="Settings" icon={<SettingsIcon size={20} />} onClose={onClose}>
@@ -216,6 +206,24 @@ export function SettingsPanel({
                   onValueChange={(v) => onChange({ ...settings, weatherLocation: v })}
                   variant="bordered"
                 />
+                <Row label="Weather" description="Fetch local weather from Open-Meteo.">
+                  <Switch
+                    isSelected={settings.showWeather}
+                    onValueChange={(v) => onChange({ ...settings, showWeather: v })}
+                  />
+                </Row>
+                <Row label="News" description="Fetch headlines and thumbnails from BBC.">
+                  <Switch
+                    isSelected={settings.showNews}
+                    onValueChange={(v) => onChange({ ...settings, showNews: v })}
+                  />
+                </Row>
+                <Row label="Site icons" description="Load favicons from DuckDuckGo.">
+                  <Switch
+                    isSelected={settings.showSiteIcons}
+                    onValueChange={(v) => onChange({ ...settings, showSiteIcons: v })}
+                  />
+                </Row>
               </div>
             )}
 
@@ -247,54 +255,11 @@ export function SettingsPanel({
                       }}
                     >
                       {(["ask", "allow", "block"] as const).map((k) => (
-                        <SelectItem key={k}>{LOC_LABEL[k]}</SelectItem>
+                        <SelectItem key={k}>{PERM_LABEL[k]}</SelectItem>
                       ))}
                     </Select>
                   </Row>
                 ))}
-
-                <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-foreground-500">
-                  New Tab page
-                </div>
-                <Row
-                  label="New Tab location"
-                  description="For the weather — approximate city by IP, never the GPS prompt."
-                >
-                  <Select
-                    aria-label="New Tab location permission"
-                    className="w-40"
-                    size="sm"
-                    variant="bordered"
-                    selectedKeys={[loc]}
-                    disallowEmptySelection
-                    onSelectionChange={(keys) => {
-                      const v = Array.from(keys)[0] as string | undefined;
-                      if (v) setLocation(v);
-                    }}
-                  >
-                    {(["ask", "allow", "block"] as const).map((k) => (
-                      <SelectItem key={k}>{LOC_LABEL[k]}</SelectItem>
-                    ))}
-                  </Select>
-                </Row>
-                <Row label="Weather" description="Fetch local weather from Open-Meteo.">
-                  <Switch
-                    isSelected={settings.showWeather}
-                    onValueChange={(v) => onChange({ ...settings, showWeather: v })}
-                  />
-                </Row>
-                <Row label="News" description="Fetch headlines and thumbnails from BBC.">
-                  <Switch
-                    isSelected={settings.showNews}
-                    onValueChange={(v) => onChange({ ...settings, showNews: v })}
-                  />
-                </Row>
-                <Row label="Site icons" description="Load favicons from DuckDuckGo.">
-                  <Switch
-                    isSelected={settings.showSiteIcons}
-                    onValueChange={(v) => onChange({ ...settings, showSiteIcons: v })}
-                  />
-                </Row>
               </div>
             )}
 
