@@ -42,6 +42,7 @@ pub fn run() {
             browser::browser_tab_navigate,
             browser::browser_tab_close,
             browser::browser_tab_eval,
+            browser::browser_tab_media,
             browser::browser_hide_all,
             browser::new_window,
             net::http_get_text,

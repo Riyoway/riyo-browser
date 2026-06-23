@@ -26,6 +26,8 @@ export const api = {
   tabNavigate: (id: string, url: string) => invoke<void>("browser_tab_navigate", { id, url }),
   tabClose: (id: string) => invoke<void>("browser_tab_close", { id }),
   tabEval: (id: string, action: TabAction) => invoke<void>("browser_tab_eval", { id, action }),
+  /** Drive a tab's active media element (toolbar player / PiP). */
+  tabMedia: (id: string, action: "playpause" | "pip") => invoke<void>("browser_tab_media", { id, action }),
   hideAll: () => invoke<void>("browser_hide_all"),
   /** Backend HTTPS GET (bypasses webview CORS) — used by the New Tab page for RSS. */
   httpGetText: (url: string) => invoke<string>("http_get_text", { url }),

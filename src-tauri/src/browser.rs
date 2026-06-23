@@ -131,10 +131,16 @@ const TAB_JS: &str = r#"
       var rows = [];
       var a = e.target.closest ? e.target.closest('a[href]') : null;
       var img = e.target.tagName === 'IMG' ? e.target : null;
+      var vid = e.target.tagName === 'VIDEO' ? e.target : null;
       var sel = (window.getSelection ? String(window.getSelection()) : '').trim();
       var ed = e.target && (e.target.isContentEditable || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
       if (a) { rows.push(ctxItem('Open link in new tab', function () { newTab(a.href); })); rows.push(ctxItem('Copy link address', function () { ctxCopy(a.href); })); rows.push(ctxSep()); }
       if (img) { rows.push(ctxItem('Open image in new tab', function () { newTab(img.src); })); rows.push(ctxItem('Copy image address', function () { ctxCopy(img.src); })); rows.push(ctxSep()); }
+      if (vid && document.pictureInPictureEnabled && vid.requestPictureInPicture) {
+        rows.push(ctxItem(vid.paused ? 'Play' : 'Pause', function () { try { vid.paused ? vid.play() : vid.pause(); } catch (e) {} }));
+        rows.push(ctxItem('Picture-in-Picture', function () { try { vid.requestPictureInPicture(); } catch (e) {} }));
+        rows.push(ctxSep());
+      }
       if (sel) {
         rows.push(ctxItem('Copy', function () { ctxCopy(sel); }));
         var lbl = sel.length > 24 ? sel.slice(0, 24) + '…' : sel;
@@ -166,6 +172,53 @@ const TAB_JS: &str = r#"
         window.addEventListener('blur', ctxClose);
       }, 0);
     }, false);
+
+    // --- media monitor + control (toolbar music player / PiP) ---
+    // Reports play/pause/metadata to the app (only on discrete events, never per
+    // timeupdate) and exposes window.__riyoMedia(action) for host-driven control.
+    function riyoActiveMedia() {
+      var list = document.querySelectorAll('video, audio');
+      for (var i = 0; i < list.length; i++) { if (!list[i].paused && !list[i].ended) return list[i]; }
+      for (var j = 0; j < list.length; j++) { if (list[j].currentTime > 0 && !list[j].ended) return list[j]; }
+      return null;
+    }
+    window.__riyoMedia = function (action) {
+      try {
+        var el = riyoActiveMedia();
+        if (action === 'playpause') { if (el) { el.paused ? el.play() : el.pause(); } }
+        else if (action === 'pip') {
+          var v = el && el.tagName === 'VIDEO' ? el : document.querySelector('video');
+          if (v && document.pictureInPictureEnabled && v.requestPictureInPicture) {
+            if (document.pictureInPictureElement) document.exitPictureInPicture(); else v.requestPictureInPicture();
+          }
+        }
+      } catch (e) {}
+    };
+    var riyoLast = '';
+    function riyoPushMedia() {
+      try {
+        var el = riyoActiveMedia();
+        var ms = navigator.mediaSession;
+        var meta = ms && ms.metadata;
+        var has = !!el;
+        var playing = el ? !el.paused && !el.ended : false;
+        var title = (meta && meta.title) || document.title || '';
+        var artist = (meta && meta.artist) || location.hostname.replace(/^www\./, '');
+        var art = '';
+        try { var aw = meta && meta.artwork; if (aw && aw.length) art = aw[aw.length - 1].src; } catch (e) {}
+        var state = JSON.stringify({ has: has, playing: playing, title: title, artist: artist, art: art });
+        if (state === riyoLast) return;
+        riyoLast = state;
+        sig('cmd=media&q=' + encodeURIComponent(state));
+      } catch (e) {}
+    }
+    var riyoTimer = null;
+    function riyoMediaSoon() { if (riyoTimer) clearTimeout(riyoTimer); riyoTimer = setTimeout(riyoPushMedia, 450); }
+    document.addEventListener('play', function () { riyoMediaSoon(); setTimeout(riyoPushMedia, 1700); }, true);
+    document.addEventListener('pause', riyoMediaSoon, true);
+    document.addEventListener('ended', riyoMediaSoon, true);
+    document.addEventListener('emptied', riyoMediaSoon, true);
+    document.addEventListener('loadedmetadata', riyoMediaSoon, true);
   } catch (e) {}
 })();
 "#;
@@ -289,6 +342,17 @@ pub async fn browser_tab_eval(app: AppHandle, id: String, action: String) {
             _ => return,
         };
         let _ = wv.eval(js);
+    }
+}
+
+/// Drive a tab's active media element from the toolbar player (play/pause, PiP).
+#[tauri::command]
+pub async fn browser_tab_media(app: AppHandle, id: String, action: String) {
+    if !matches!(action.as_str(), "playpause" | "pip") {
+        return;
+    }
+    if let Some(wv) = app.get_webview(&label_of(&id)) {
+        let _ = wv.eval(&format!("window.__riyoMedia&&window.__riyoMedia('{action}')"));
     }
 }
 

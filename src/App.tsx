@@ -46,6 +46,7 @@ import { BookmarksPanel } from "./BookmarksPanel";
 import { DownloadsPanel } from "./DownloadsPanel";
 import { DownloadsPopover } from "./DownloadsPopover";
 import { BookmarksBar } from "./BookmarksBar";
+import { MediaPlayer, type MediaState } from "./MediaPlayer";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
@@ -57,6 +58,7 @@ export function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [dlItems, setDlItems] = useState<DownloadItem[]>([]);
   const [dlPopover, setDlPopover] = useState(false);
+  const [media, setMedia] = useState<MediaState | null>(null);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
   const stateRef = useRef<TabState>({ tabs, activeId });
@@ -104,6 +106,7 @@ export function App() {
 
   const closeTab = useCallback((id: string) => {
     api.tabClose(id).catch(() => {});
+    setMedia((m) => (m && m.tabId === id ? null : m));
     setState((s) => {
       const idx = s.tabs.findIndex((t) => t.id === id);
       if (idx === -1) return s;
@@ -125,6 +128,8 @@ export function App() {
   }, []);
 
   const setTabUrl = useCallback((id: string, url: string) => {
+    // A real navigation drops the old page's media; the new page re-reports if any.
+    setMedia((m) => (m && m.tabId === id ? null : m));
     setState((s) =>
       persistTabs({
         ...s,
@@ -216,6 +221,14 @@ export function App() {
         else if (s.cmd === "search") {
           const u = toUrl(s.arg, settingsRef.current.searchEngine);
           if (u) addTab(u);
+        } else if (s.cmd === "media") {
+          try {
+            const st = JSON.parse(s.arg) as Omit<MediaState, "tabId">;
+            if (st.has) setMedia({ tabId: s.id, ...st });
+            else setMedia((m) => (m && m.tabId === s.id ? null : m));
+          } catch {
+            /* ignore malformed media state */
+          }
         } else if (s.cmd === "settings") setView((v) => (v === "settings" ? "web" : "settings"));
         else if (s.cmd === "focusurl") {
           setView("web");
@@ -519,6 +532,14 @@ export function App() {
         <Button isIconOnly variant="light" size="sm" title="Home" aria-label="Home" onPress={goHome}>
           <Home size={16} />
         </Button>
+
+        {media && media.has && (
+          <MediaPlayer
+            media={media}
+            onPlayPause={() => api.tabMedia(media.tabId, "playpause").catch(() => {})}
+            onGoToTab={() => activate(media.tabId)}
+          />
+        )}
 
         <Input
           ref={addrRef}
