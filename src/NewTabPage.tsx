@@ -1,4 +1,5 @@
 import { type CSSProperties, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Spinner } from "@heroui/react";
 import { SEARCH_ENGINE_LABEL, type SearchEngine, type TempUnit } from "./settings";
 import {
   cachedNews,
@@ -279,7 +280,7 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
 
   return (
     <div
-      className="ntp absolute inset-0 z-40 overflow-auto"
+      className="ntp anim-fade absolute inset-0 z-40 overflow-auto"
       style={{
         background: "#0a0a0a",
         color: "#ededed",
@@ -358,12 +359,12 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
 
         {/* Frequently-used sites */}
         <div style={{ width: "100%", maxWidth: 1120, marginTop: 48, display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
-          {sites.map((s) => (
+          {sites.map((s, i) => (
             <button
               key={s.host + s.url}
-              className="ntp-shortcut"
+              className="ntp-shortcut anim-fade-up"
               onClick={() => onNavigate(s.url)}
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, width: 82 }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, width: 82, animationDelay: `${i * 30}ms` }}
             >
               <div
                 className="ntp-shortcut-icon"
@@ -396,7 +397,11 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
           {weather ? (
             <div style={{ display: "flex", gap: 6, marginTop: 18 }}>
               {weather.days.map((d, i) => (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 11, padding: "6px 0" }}>
+                <div
+                  key={i}
+                  className="anim-fade-up"
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 11, padding: "6px 0", animationDelay: `${i * 35}ms` }}
+                >
                   <span style={{ fontSize: 11, color: "#8a8a8a", textTransform: "uppercase", letterSpacing: "0.6px" }}>{d.day}</span>
                   <div style={{ height: 28, display: "flex", alignItems: "center" }}>
                     <WeatherIcon cond={d.icon} />
@@ -408,8 +413,12 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
                 </div>
               ))}
             </div>
+          ) : weatherErr ? (
+            <div style={muted}>Couldn't load weather.</div>
           ) : (
-            <div style={muted}>{weatherErr ? "Couldn't load weather." : "Loading weather…"}</div>
+            <div style={{ ...muted, display: "flex", alignItems: "center", gap: 8 }}>
+              <Spinner size="sm" /> Loading weather…
+            </div>
           )}
         </div>
 
@@ -447,12 +456,12 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
                 news.length === 0 ? (
                   <div style={muted}>No stories right now.</div>
                 ) : (
-                  news.map((n) => (
+                  news.map((n, i) => (
                     <button
                       key={n.url}
-                      className="ntp-news"
+                      className="ntp-news anim-fade-up"
                       onClick={() => onNavigate(n.url)}
-                      style={{ display: "flex", gap: 14, alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.045)" }}
+                      style={{ display: "flex", gap: 14, alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.045)", animationDelay: `${Math.min(i, 8) * 35}ms` }}
                     >
                       <NewsThumb src={n.image} />
                       <span style={{ flex: 1, minWidth: 0 }}>
@@ -465,8 +474,12 @@ export function NewTabPage({ searchEngine, tempUnit, weatherLocation, onNavigate
                     </button>
                   ))
                 )
+              ) : newsErr ? (
+                <div style={muted}>Couldn't load news.</div>
               ) : (
-                <div style={muted}>{newsErr ? "Couldn't load news." : "Loading…"}</div>
+                <div style={{ ...muted, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Spinner size="sm" /> Loading…
+                </div>
               )}
             </div>
           </div>

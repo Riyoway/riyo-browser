@@ -611,7 +611,7 @@ export function App() {
             it's open; click-away closes it. "Full download history" opens the page. */}
         {dlPopover && view === "web" && (
           <>
-            <div className="absolute inset-0 z-40" onClick={() => setDlPopover(false)} />
+            <div className="anim-fade absolute inset-0 z-40" onClick={() => setDlPopover(false)} />
             <div className="absolute right-3 top-3 z-50">
               <DownloadsPopover
                 items={dlItems}

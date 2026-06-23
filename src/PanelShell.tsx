@@ -19,7 +19,7 @@ export function PanelShell({
   children: ReactNode;
 }) {
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-background">
+    <div className="anim-fade-up absolute inset-0 z-50 flex flex-col bg-background">
       <header className="flex items-center gap-2.5 border-b border-divider px-5 py-3">
         {icon}
         <h1 className="text-lg font-semibold">{title}</h1>

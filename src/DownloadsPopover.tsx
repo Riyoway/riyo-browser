@@ -96,7 +96,7 @@ export function DownloadsPopover({
 }) {
   const recent = items.slice(0, 5);
   return (
-    <div className="w-[360px] overflow-hidden rounded-large border border-divider bg-content1 shadow-2xl">
+    <div className="anim-pop w-[360px] overflow-hidden rounded-large border border-divider bg-content1 shadow-2xl">
       <div className="flex items-center justify-between px-4 py-3">
         <span className="text-sm font-semibold">Recent downloads</span>
         <Button isIconOnly size="sm" variant="light" aria-label="Close" onPress={onClose}>

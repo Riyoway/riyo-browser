@@ -72,3 +72,31 @@ button:focus-visible,
   height: 0;
   width: 0;
 }
+
+/* ---- Entrance animations (panels, popover, New Tab content) ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Only animate when the user hasn't asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .anim-fade {
+    animation: fadeIn 0.2s ease both;
+  }
+  .anim-fade-up {
+    animation: fadeUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .anim-pop {
+    animation: popIn 0.15s ease-out both;
+    transform-origin: top right;
+  }
+}
