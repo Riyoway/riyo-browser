@@ -33,6 +33,15 @@ pub struct DownloadItem {
     received: u64,
     total: u64,
     error: String,
+    /// Epoch milliseconds when the download was added (for "x minutes ago").
+    created_at: u64,
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 #[derive(Clone, Serialize)]
@@ -182,6 +191,7 @@ pub fn enqueue(app: &AppHandle, url: String, suggested: Option<String>) -> Resul
                 received: 0,
                 total: 0,
                 error: String::new(),
+                created_at: now_ms(),
             },
         );
     }

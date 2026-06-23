@@ -42,6 +42,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { BookmarksPanel } from "./BookmarksPanel";
 import { DownloadsPanel } from "./DownloadsPanel";
+import { DownloadsPopover } from "./DownloadsPopover";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
@@ -52,6 +53,7 @@ export function App() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [dlItems, setDlItems] = useState<DownloadItem[]>([]);
+  const [dlPopover, setDlPopover] = useState(false);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
   const stateRef = useRef<TabState>({ tabs, activeId });
@@ -60,6 +62,8 @@ export function App() {
   viewRef.current = view;
   const settingsRef = useRef<Settings>(settings);
   settingsRef.current = settings;
+  const dlPopoverRef = useRef(false);
+  dlPopoverRef.current = dlPopover;
 
   const holderRef = useRef<HTMLDivElement>(null);
   const addrRef = useRef<HTMLInputElement>(null);
@@ -121,7 +125,7 @@ export function App() {
   // Show the active tab at the placeholder bounds (creating it on about:blank if
   // new, then navigating to its url). Never runs while a panel covers the page.
   const sync = useCallback(() => {
-    if (viewRef.current !== "web") return;
+    if (viewRef.current !== "web" || dlPopoverRef.current) return;
     const { activeId, tabs } = stateRef.current;
     const active = tabs.find((t) => t.id === activeId);
     // The New Tab / blank page has no native webview — park everything and let
@@ -145,11 +149,12 @@ export function App() {
       .catch(() => {});
   }, []);
 
-  // Show the active tab when on the web view; park everything when a panel is up.
+  // Show the active tab when on the web view; park everything when a panel or the
+  // downloads popover is up (so that host-DOM UI isn't hidden by the webview).
   useEffect(() => {
-    if (view === "web") sync();
+    if (view === "web" && !dlPopover) sync();
     else api.hideAll().catch(() => {});
-  }, [view, activeId, sync]);
+  }, [view, activeId, sync, dlPopover]);
 
   // Keep bounds in sync with the layout; park everything when unmounting.
   useEffect(() => {
@@ -292,6 +297,7 @@ export function App() {
   const openPanel = useCallback((v: View) => {
     if (v === "history") setHistory(loadHistory());
     if (v === "bookmarks") setBookmarks(loadBookmarks());
+    setDlPopover(false);
     setView(v);
   }, []);
 
@@ -342,8 +348,9 @@ export function App() {
       } else if (e.altKey && k === "arrowright") {
         e.preventDefault();
         evalActive("forward");
-      } else if (k === "escape" && viewRef.current !== "web") {
-        setView("web");
+      } else if (k === "escape") {
+        if (dlPopoverRef.current) setDlPopover(false);
+        else if (viewRef.current !== "web") setView("web");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -492,7 +499,17 @@ export function App() {
           isInvisible={activeDownloads === 0}
           placement="top-right"
         >
-          <Button isIconOnly variant="light" size="sm" title="Downloads" aria-label="Downloads" onPress={() => setView("downloads")}>
+          <Button
+            isIconOnly
+            variant="light"
+            size="sm"
+            title="Downloads"
+            aria-label="Downloads"
+            onPress={() => {
+              setView("web");
+              setDlPopover((o) => !o);
+            }}
+          >
             <Download size={17} />
           </Button>
         </Badge>
@@ -546,6 +563,24 @@ export function App() {
             onSetMaxConcurrent={setMaxDownloads}
             onClose={() => setView("web")}
           />
+        )}
+
+        {/* Quick-glance downloads popover (top-right). The webview is parked while
+            it's open; click-away closes it. "Full download history" opens the page. */}
+        {dlPopover && view === "web" && (
+          <>
+            <div className="absolute inset-0 z-40" onClick={() => setDlPopover(false)} />
+            <div className="absolute right-3 top-3 z-50">
+              <DownloadsPopover
+                items={dlItems}
+                onOpenFull={() => {
+                  setDlPopover(false);
+                  setView("downloads");
+                }}
+                onClose={() => setDlPopover(false)}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>

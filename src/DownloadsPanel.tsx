@@ -13,13 +13,7 @@ import {
 } from "lucide-react";
 import { PanelShell } from "./PanelShell";
 import { downloads, type DownloadItem, type DownloadStatus } from "./ipc";
-
-function fmtBytes(n: number): string {
-  if (!n || n < 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
-  return `${(n / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${units[i]}`;
-}
+import { fmtBytes, relTime } from "./format";
 
 const STATUS_CHIP: Record<DownloadStatus, { label: string; color: "default" | "primary" | "warning" | "success" | "danger" }> = {
   queued: { label: "Queued", color: "default" },
@@ -64,7 +58,7 @@ function Row({ it }: { it: DownloadItem }) {
               ? `${fmtBytes(it.received)} / ${fmtBytes(it.total)} · ${pct}%`
               : fmtBytes(it.received)
             : it.status === "completed"
-              ? fmtBytes(it.total || it.received)
+              ? `${fmtBytes(it.total || it.received)}${relTime(it.createdAt) ? ` · ${relTime(it.createdAt)}` : ""}`
               : it.status === "failed"
                 ? it.error || "Failed"
                 : it.status === "queued"

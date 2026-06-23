@@ -39,6 +39,7 @@ export interface DownloadItem {
   received: number;
   total: number;
   error: string;
+  createdAt: number;
 }
 
 export const downloads = {
