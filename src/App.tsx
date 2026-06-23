@@ -169,6 +169,11 @@ export function App() {
   }, []);
 
   // ---- tab drag: reorder within the strip; tear off / move across windows ----
+  // The dragged tab id is mirrored into a ref: the rapid drag handlers must read
+  // it synchronously (the `dragId` state lags a render, so reading state would
+  // miss the early dragover/drop events — that's why reordering "did nothing" and
+  // the drop fell through to tear-off). State stays only for the visual ring.
+  const dragIdRef = useRef<string | null>(null);
   // Set true when a drag drops onto the tab strip itself — the reliable signal
   // for "this was a reorder" that needs no (DPI-fragile) coordinates.
   const droppedInStripRef = useRef(false);
@@ -193,6 +198,7 @@ export function App() {
   // cursor + physical bounds avoid the webview's unreliable drag coordinates.)
   const onTabDragEnd = useCallback(
     (tab: Tab) => {
+      dragIdRef.current = null;
       setDragId(null);
       if (droppedInStripRef.current) return; // reordered within the strip
       Promise.all([win.cursorPosition(), win.windowBounds()])
@@ -546,10 +552,10 @@ export function App() {
           // Make the whole strip a drop target so a dropped tab reliably registers
           // as a reorder (no coordinates needed) — see droppedInStripRef.
           onDragOver={(e) => {
-            if (dragId) e.preventDefault();
+            if (dragIdRef.current) e.preventDefault();
           }}
           onDrop={(e) => {
-            if (dragId) {
+            if (dragIdRef.current) {
               e.preventDefault();
               droppedInStripRef.current = true;
             }
@@ -569,14 +575,16 @@ export function App() {
               }
               draggable
               onDragStart={(e) => {
-                setDragId(t.id);
+                dragIdRef.current = t.id;
                 droppedInStripRef.current = false;
+                setDragId(t.id);
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("text/plain", t.url);
               }}
               onDragOver={(e) => {
                 e.preventDefault();
-                if (dragId && dragId !== t.id) reorderTab(dragId, t.id);
+                const d = dragIdRef.current;
+                if (d && d !== t.id) reorderTab(d, t.id);
               }}
               onDragEnd={() => onTabDragEnd(t)}
               onClick={() => activate(t.id)}
