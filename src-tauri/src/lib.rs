@@ -51,6 +51,7 @@ pub fn run() {
             browser::take_pending_open,
             browser::window_bounds,
             browser::cursor_position,
+            browser::self_geometry,
             browser::move_tab_to_window,
             net::http_get_text,
             permissions::set_permissions,

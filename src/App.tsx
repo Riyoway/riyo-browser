@@ -168,55 +168,107 @@ export function App() {
     });
   }, []);
 
-  // ---- tab drag: reorder within the strip; tear off / move across windows ----
-  // The dragged tab id is mirrored into a ref: the rapid drag handlers must read
-  // it synchronously (the `dragId` state lags a render, so reading state would
-  // miss the early dragover/drop events — that's why reordering "did nothing" and
-  // the drop fell through to tear-off). State stays only for the visual ring.
+  // ---- tab drag ----
+  // WebView2 escalates the tab drag to an OS drag, so the page never receives
+  // dragover/drop — reordering can't use them. Instead, while a drag is in flight
+  // we poll the NATIVE cursor position, map it into client coordinates, and
+  // reorder live; on dragend we keep it if the cursor was last over the strip,
+  // else route by window bounds. (HTML5 drag is kept only for its lifecycle —
+  // dragend fires even when released outside the window, which tear-off needs.)
   const dragIdRef = useRef<string | null>(null);
-  // Set true when a drag drops onto the tab strip itself — the reliable signal
-  // for "this was a reorder" that needs no (DPI-fragile) coordinates.
-  const droppedInStripRef = useRef(false);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const geomRef = useRef<{ x: number; y: number; scale: number } | null>(null);
+  const overStripRef = useRef(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const reorderTab = useCallback((dragId: string, overId: string) => {
-    if (dragId === overId) return;
+  // Move the dragged tab to the slot under client-x `cx` (live, while dragging).
+  const reorderToCursor = useCallback((cx: number) => {
+    const id = dragIdRef.current;
+    const els = stripRef.current?.querySelectorAll<HTMLElement>("[data-tabid]");
+    if (!id || !els || !els.length) return;
+    let index = 0; // # of non-dragged tabs whose center is left of the cursor
+    els.forEach((el) => {
+      if (el.dataset.tabid === id) return;
+      const r = el.getBoundingClientRect();
+      if (cx > r.left + r.width / 2) index++;
+    });
     setState((s) => {
-      const from = s.tabs.findIndex((t) => t.id === dragId);
-      const to = s.tabs.findIndex((t) => t.id === overId);
-      if (from === -1 || to === -1) return s;
+      const from = s.tabs.findIndex((t) => t.id === id);
+      if (from === -1) return s;
       const tabs = [...s.tabs];
       const [moved] = tabs.splice(from, 1);
-      tabs.splice(to, 0, moved);
+      tabs.splice(index, 0, moved);
+      if (tabs.every((t, i) => t.id === s.tabs[i].id)) return s; // unchanged
       return persistTabs({ ...s, tabs });
     });
   }, []);
 
-  // On drop: a drop on the strip is a reorder (already applied live) — keep it.
-  // Otherwise read the real cursor position natively (physical px) and compare to
-  // every window's physical bounds: inside this window → keep; over another window
-  // → move the tab there; outside every window → tear off to a new window. (Native
-  // cursor + physical bounds avoid the webview's unreliable drag coordinates.)
+  const stopDragPoll = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const startDragPoll = useCallback(() => {
+    stopDragPoll();
+    win
+      .selfGeometry()
+      .then(([x, y, scale]) => (geomRef.current = { x, y, scale }))
+      .catch(() => {});
+    pollRef.current = setInterval(() => {
+      if (!dragIdRef.current) return;
+      win
+        .cursorPosition()
+        .then(([cx, cy]) => {
+          const g = geomRef.current;
+          const strip = stripRef.current;
+          if (!g || !strip) return;
+          const clientX = (cx - g.x) / g.scale;
+          const clientY = (cy - g.y) / g.scale;
+          const sr = strip.getBoundingClientRect();
+          overStripRef.current =
+            clientX >= sr.left - 6 && clientX <= sr.right + 6 && clientY >= sr.top - 10 && clientY <= sr.bottom + 28;
+          if (overStripRef.current) reorderToCursor(clientX);
+        })
+        .catch(() => {});
+    }, 50);
+  }, [reorderToCursor, stopDragPoll]);
+
+  // On dragend: cursor last over the strip → reorder kept. Otherwise route by the
+  // native cursor vs each window's bounds: over another window → move there;
+  // within this window (page area) → keep; outside every window → new window.
   const onTabDragEnd = useCallback(
     (tab: Tab) => {
+      stopDragPoll();
       dragIdRef.current = null;
       setDragId(null);
-      if (droppedInStripRef.current) return; // reordered within the strip
+      const wasOverStrip = overStripRef.current;
+      overStripRef.current = false;
+      if (wasOverStrip) return; // reordered within the strip
       Promise.all([win.cursorPosition(), win.windowBounds()])
         .then(([[cx, cy], bounds]) => {
           const inside = (b: { x: number; y: number; w: number; h: number }) =>
             cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h;
-          const self = bounds.find((b) => b.label === win.label);
-          if (self && inside(self)) return; // dropped within this window
-          if (stateRef.current.tabs.length <= 1 && tab.url === NEWTAB) return; // nothing to move
           const target = bounds.find((b) => b.label !== win.label && inside(b));
-          if (target) win.moveTabToWindow(target.label, tab.url).catch(() => {});
-          else win.newWindow(tab.url === NEWTAB ? undefined : tab.url).catch(() => {});
+          if (target) {
+            win.moveTabToWindow(target.label, tab.url).catch(() => {});
+            closeTab(tab.id);
+            return;
+          }
+          const self = bounds.find((b) => b.label === win.label);
+          if (self && inside(self)) return; // within this window → keep
+          if (stateRef.current.tabs.length <= 1 && tab.url === NEWTAB) return; // nothing to tear off
+          win.newWindow(tab.url === NEWTAB ? undefined : tab.url).catch(() => {});
           closeTab(tab.id);
         })
         .catch(() => {});
     },
-    [closeTab]
+    [closeTab, stopDragPoll]
   );
+
+  // Stop any in-flight drag poll if the component unmounts.
+  useEffect(() => stopDragPoll, [stopDragPoll]);
 
   // ---- webview placement ----
   // Show the active tab at the placeholder bounds (creating it on about:blank if
@@ -541,6 +593,7 @@ export function App() {
       {/* Tab strip doubles as the custom title bar (native decorations are off). */}
       <div className="flex select-none items-stretch bg-content1">
         <div
+          ref={stripRef}
           className="no-scrollbar flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto px-2 pt-1.5"
           // The strip has no vertical scroll, so map wheel to horizontal: tabs
           // keep their full width and overflow stays reachable (the bar's own
@@ -549,21 +602,11 @@ export function App() {
             const el = e.currentTarget;
             if (el.scrollWidth > el.clientWidth) el.scrollLeft += e.deltaY + e.deltaX;
           }}
-          // Make the whole strip a drop target so a dropped tab reliably registers
-          // as a reorder (no coordinates needed) — see droppedInStripRef.
-          onDragOver={(e) => {
-            if (dragIdRef.current) e.preventDefault();
-          }}
-          onDrop={(e) => {
-            if (dragIdRef.current) {
-              e.preventDefault();
-              droppedInStripRef.current = true;
-            }
-          }}
         >
           {tabs.map((t) => (
             <div
               key={t.id}
+              data-tabid={t.id}
               // All tabs share one width: 180px while they fit, shrinking together
               // (uniformly, down to a 72px floor) only when the strip overflows.
               className={
@@ -576,15 +619,11 @@ export function App() {
               draggable
               onDragStart={(e) => {
                 dragIdRef.current = t.id;
-                droppedInStripRef.current = false;
+                overStripRef.current = true;
                 setDragId(t.id);
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("text/plain", t.url);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                const d = dragIdRef.current;
-                if (d && d !== t.id) reorderTab(d, t.id);
+                startDragPoll();
               }}
               onDragEnd={() => onTabDragEnd(t)}
               onClick={() => activate(t.id)}

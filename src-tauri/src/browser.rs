@@ -571,12 +571,25 @@ pub fn window_bounds(app: AppHandle) -> Vec<WinBounds> {
 }
 
 /// Global cursor position in *physical* screen pixels (matches `window_bounds`).
-/// Read at drag end since the webview's own drag coordinates are unreliable.
+/// Read during/at drag since the webview's own drag coordinates are unreliable.
 #[tauri::command]
 pub fn cursor_position(app: AppHandle) -> (i32, i32) {
     app.cursor_position()
         .map(|p| (p.x.round() as i32, p.y.round() as i32))
         .unwrap_or((i32::MIN, i32::MIN))
+}
+
+/// The calling window's content-area origin (physical px) and scale factor — lets
+/// the frontend convert the physical cursor into CSS/client coordinates to drive
+/// live tab reordering (WebView2 escalates the drag to the OS, so the page never
+/// receives dragover/drop; we poll the cursor instead).
+#[tauri::command]
+pub fn self_geometry(window: tauri::Window) -> (i32, i32, f64) {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let pos = window
+        .inner_position()
+        .unwrap_or(tauri::PhysicalPosition::new(0, 0));
+    (pos.x, pos.y, scale)
 }
 
 /// Move a dragged tab into another existing window: it opens `url` there (via the

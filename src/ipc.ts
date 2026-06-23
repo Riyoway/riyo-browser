@@ -23,9 +23,12 @@ export const win = {
   /** Outer bounds (physical px) of every browser window — used to route a
    *  dragged-out tab to the window it was dropped over. */
   windowBounds: () => invoke<WinBounds[]>("window_bounds"),
-  /** Global cursor position (physical px) — read at drag end (webview drag
+  /** Global cursor position (physical px) — read during/at drag (webview drag
    *  coordinates are unreliable). */
   cursorPosition: () => invoke<[number, number]>("cursor_position"),
+  /** This window's content origin (physical px) + scale, to map the cursor into
+   *  client coordinates for live tab reordering. Returns [x, y, scale]. */
+  selfGeometry: () => invoke<[number, number, number]>("self_geometry"),
   /** Move a dragged tab into another existing window. */
   moveTabToWindow: (target: string, url: string) =>
     invoke<void>("move_tab_to_window", { target, url }),
