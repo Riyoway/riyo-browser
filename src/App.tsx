@@ -46,7 +46,6 @@ import { DownloadsPanel } from "./DownloadsPanel";
 import { DownloadsPopover } from "./DownloadsPopover";
 import { BookmarksBar } from "./BookmarksBar";
 import { MediaPlayer, type MediaState } from "./MediaPlayer";
-import { OverflowMenu } from "./OverflowMenu";
 
 type View = "web" | "settings" | "history" | "bookmarks" | "downloads";
 
@@ -58,7 +57,6 @@ export function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [dlItems, setDlItems] = useState<DownloadItem[]>([]);
   const [dlPopover, setDlPopover] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [media, setMedia] = useState<MediaState | null>(null);
 
   // Mirror state into refs so the stable callbacks below always read fresh values.
@@ -70,8 +68,7 @@ export function App() {
   settingsRef.current = settings;
   const dlPopoverRef = useRef(false);
   dlPopoverRef.current = dlPopover;
-  const menuOpenRef = useRef(false);
-  menuOpenRef.current = menuOpen;
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   const holderRef = useRef<HTMLDivElement>(null);
   const addrRef = useRef<HTMLInputElement>(null);
@@ -159,10 +156,10 @@ export function App() {
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) return; // wait for a real layout
-    // Shrink the webview to free a right-hand strip for the overflow menu /
-    // downloads popover, instead of hiding the whole page behind them (a native
-    // webview can't be drawn under host DOM).
-    const reserve = menuOpenRef.current ? 290 : dlPopoverRef.current ? 384 : 0;
+    // Shrink the webview to free a right-hand strip for the downloads popover,
+    // instead of hiding the whole page behind it (a native webview can't be
+    // drawn under host DOM). The ⋮ menu is a native popup, so it needs none.
+    const reserve = dlPopoverRef.current ? 384 : 0;
     const width = Math.max(200, r.width - reserve);
     api
       .tabShow(activeId, r.left, r.top, width, r.height)
@@ -180,7 +177,7 @@ export function App() {
   useEffect(() => {
     if (view === "web") sync();
     else api.hideAll().catch(() => {});
-  }, [view, activeId, sync, dlPopover, menuOpen]);
+  }, [view, activeId, sync, dlPopover]);
 
   // Keep bounds in sync with the layout; park everything when unmounting.
   useEffect(() => {
@@ -364,7 +361,6 @@ export function App() {
     if (v === "history") setHistory(loadHistory());
     if (v === "bookmarks") setBookmarks(loadBookmarks());
     setDlPopover(false);
-    setMenuOpen(false);
     setView(v);
   }, []);
 
@@ -385,6 +381,27 @@ export function App() {
   const activeDownloads = dlItems.filter(
     (d) => d.status === "active" || d.status === "paused" || d.status === "queued"
   ).length;
+
+  // Selections from the native overflow (⋮) menu.
+  useEffect(() => {
+    let disposed = false;
+    let un: (() => void) | null = null;
+    events
+      .onOverflowAction((action) => {
+        if (action === "newtab") addTab();
+        else if (action === "newwindow") win.newWindow().catch(() => {});
+        else if (action === "settings") openPanel("settings");
+        else if (action === "bookmarksbar")
+          setSettings((s) => saveSettings({ ...s, showBookmarksBar: !s.showBookmarksBar }));
+        else if (action === "alwaysontop") toggleAlwaysOnTop();
+      })
+      .then((f) => (disposed ? f() : (un = f)))
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      un?.();
+    };
+  }, [addTab, openPanel, toggleAlwaysOnTop]);
 
   // ---- keyboard shortcuts ----
   useEffect(() => {
@@ -424,8 +441,7 @@ export function App() {
         e.preventDefault();
         evalActive("forward");
       } else if (k === "escape") {
-        if (menuOpenRef.current) setMenuOpen(false);
-        else if (dlPopoverRef.current) setDlPopover(false);
+        if (dlPopoverRef.current) setDlPopover(false);
         else if (viewRef.current !== "web") setView("web");
       }
     };
@@ -620,7 +636,6 @@ export function App() {
             aria-label="Downloads"
             onPress={() => {
               setView("web");
-              setMenuOpen(false);
               setDlPopover((o) => !o);
             }}
           >
@@ -628,6 +643,7 @@ export function App() {
           </Button>
         </Badge>
         <Button
+          ref={menuBtnRef}
           isIconOnly
           variant="light"
           size="sm"
@@ -636,7 +652,9 @@ export function App() {
           onPress={() => {
             setView("web");
             setDlPopover(false);
-            setMenuOpen((o) => !o);
+            const r = menuBtnRef.current?.getBoundingClientRect();
+            // 280 = the popup menu's width; right-align it to the ⋮ button.
+            api.openOverflowMenu(r ? r.right - 280 : 0, r ? r.bottom + 4 : 40).catch(() => {});
           }}
         >
           <EllipsisVertical size={18} />
@@ -715,26 +733,6 @@ export function App() {
           </>
         )}
 
-        {/* Overflow (⋮) menu — collected toolbar actions. */}
-        {menuOpen && view === "web" && (
-          <>
-            <div className="anim-fade absolute inset-0 z-40" onClick={() => setMenuOpen(false)} />
-            <div className="absolute right-3 top-3 z-50">
-              <OverflowMenu
-                showBookmarksBar={settings.showBookmarksBar}
-                alwaysOnTop={settings.alwaysOnTop}
-                onClose={() => setMenuOpen(false)}
-                onNewTab={() => addTab()}
-                onNewWindow={() => win.newWindow().catch(() => {})}
-                onSettings={() => openPanel("settings")}
-                onToggleBookmarksBar={() =>
-                  setSettings((s) => saveSettings({ ...s, showBookmarksBar: !s.showBookmarksBar }))
-                }
-                onToggleAlwaysOnTop={toggleAlwaysOnTop}
-              />
-            </div>
-          </>
-        )}
       </div>
     </div>
   );

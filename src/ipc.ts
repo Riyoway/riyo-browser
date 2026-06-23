@@ -33,6 +33,10 @@ export const api = {
   hideAll: () => invoke<void>("browser_hide_all"),
   /** Backend HTTPS GET (bypasses webview CORS) — used by the New Tab page for RSS. */
   httpGetText: (url: string) => invoke<string>("http_get_text", { url }),
+  /** Toggle the overflow (⋮) popup-window menu at content-relative (x, y). */
+  openOverflowMenu: (x: number, y: number) => invoke<void>("open_overflow_menu", { x, y }),
+  /** From the popup menu window: route a selection to its owner window. */
+  popupAction: (action: string) => invoke<void>("popup_action", { action }),
 };
 
 // ---- downloads (queue-managed; see src-tauri/src/downloads.rs) ----
@@ -90,4 +94,7 @@ export const events = {
    *  menu action); `arg` carries e.g. the search query. */
   onShortcut: (cb: (s: { id: string; cmd: string; arg: string }) => void): Promise<UnlistenFn> =>
     listen<{ id: string; cmd: string; arg: string }>("browser-shortcut", (e) => cb(e.payload)),
+  /** A selection from the native overflow (⋮) menu. */
+  onOverflowAction: (cb: (action: string) => void): Promise<UnlistenFn> =>
+    listen<string>("overflow-action", (e) => cb(e.payload)),
 };
