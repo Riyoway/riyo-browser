@@ -1,20 +1,28 @@
-import { type CSSProperties, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, useEffect, useRef, useState } from "react";
 import { Spinner } from "@heroui/react";
+import { Pin, Plus, X } from "lucide-react";
 import { SEARCH_ENGINE_LABEL, type SearchEngine, type TempUnit } from "./settings";
 import {
+  addSite,
   cachedNews,
   cachedWeather,
   faviconUrls,
   fetchNews,
   fetchWeather,
   getLocPerm,
+  isPinned,
+  MAX_SITES,
   NEWS_CATEGORIES,
+  pinSite,
+  removeSite,
   setLocPerm,
   topSites,
+  unpinSite,
   type IconBucket,
   type LocPerm,
   type NewsCategory,
   type NewsItem,
+  type Site,
   type Weather,
 } from "./newtabData";
 import { LocationPermission } from "./LocationPermission";
@@ -163,6 +171,27 @@ const card: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.06)",
   borderRadius: 16,
 };
+// Small round corner control on a shortcut tile (pin / remove).
+function ctrlBtn(side: "left" | "right", bg: string): CSSProperties {
+  const s: CSSProperties = {
+    position: "absolute",
+    top: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    background: bg,
+    color: "#fff",
+    border: "1px solid rgba(0,0,0,0.35)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.45)",
+  };
+  if (side === "left") s.left = 6;
+  else s.right = 6;
+  return s;
+}
 const cardLabel: CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
@@ -189,7 +218,21 @@ export function NewTabPage({
   const [draft, setDraft] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const sites = useMemo(() => topSites(8), []);
+  // Shortcuts: pinned + most-visited (deduped), with pin/remove/add (max 8).
+  const [sites, setSites] = useState<Site[]>(() => topSites(MAX_SITES));
+  const refreshSites = () => setSites(topSites(MAX_SITES));
+  const [adding, setAdding] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addUrl, setAddUrl] = useState("");
+  const submitAdd = (e: FormEvent) => {
+    e.preventDefault();
+    if (addSite(addName, addUrl)) {
+      setAddName("");
+      setAddUrl("");
+      setAdding(false);
+      refreshSites();
+    }
+  };
 
   const [weather, setWeather] = useState<Weather | null>(() => cachedWeather(weatherLocation, tempUnit));
   const [weatherErr, setWeatherErr] = useState(false);
@@ -417,40 +460,114 @@ export function NewTabPage({
           </form>
         </div>
 
-        {/* Frequently-used sites */}
+        {/* Frequently-used sites — pinned + most-visited, with pin/remove/add. */}
         <div style={{ width: "100%", maxWidth: 1120, marginTop: 48, display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
-          {sites.map((s, i) => (
-            <button
-              key={s.host + s.url}
-              className="ntp-shortcut anim-fade-up"
-              onClick={() => onNavigate(s.url)}
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, width: 82, animationDelay: `${i * 30}ms` }}
-            >
+          {sites.map((s, i) => {
+            const pinned = isPinned(s.host);
+            return (
               <div
-                className="ntp-shortcut-icon"
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 15,
-                  background: "#161616",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                key={s.host + s.url}
+                className="ntp-shortcut anim-fade-up group"
+                style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 9, width: 82, animationDelay: `${i * 30}ms` }}
               >
-                {showSiteIcons ? (
-                  <Favicon host={s.host} mono={(s.name[0] || "?").toUpperCase()} />
-                ) : (
-                  <span style={{ fontSize: 20, fontWeight: 500, color: "#d4d4d4" }}>
-                    {(s.name[0] || "?").toUpperCase()}
-                  </span>
-                )}
+                <button
+                  type="button"
+                  onClick={() => onNavigate(s.url)}
+                  title={s.url}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 9 }}
+                >
+                  <div
+                    className="ntp-shortcut-icon"
+                    style={{ width: 52, height: 52, borderRadius: 15, background: "#161616", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    {showSiteIcons ? (
+                      <Favicon host={s.host} mono={(s.name[0] || "?").toUpperCase()} />
+                    ) : (
+                      <span style={{ fontSize: 20, fontWeight: 500, color: "#d4d4d4" }}>{(s.name[0] || "?").toUpperCase()}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, color: "#8a8a8a", maxWidth: 82, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                </button>
+                <button
+                  type="button"
+                  className="opacity-0 transition-opacity group-hover:opacity-100"
+                  title={pinned ? "Unpin" : "Pin"}
+                  onClick={() => {
+                    if (pinned) unpinSite(s.host);
+                    else pinSite(s);
+                    refreshSites();
+                  }}
+                  style={ctrlBtn("left", pinned ? "#6366f1" : "#2a2a32")}
+                >
+                  <Pin size={11} className={pinned ? "fill-current" : ""} />
+                </button>
+                <button
+                  type="button"
+                  className="opacity-0 transition-opacity group-hover:opacity-100"
+                  title="Remove"
+                  onClick={() => {
+                    removeSite(s.host);
+                    refreshSites();
+                  }}
+                  style={ctrlBtn("right", "#2a2a32")}
+                >
+                  <X size={11} />
+                </button>
               </div>
-              <span style={{ fontSize: 12, color: "#8a8a8a", maxWidth: 82, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+            );
+          })}
+          {sites.length < MAX_SITES && !adding && (
+            <button
+              type="button"
+              className="ntp-shortcut anim-fade-up"
+              onClick={() => setAdding(true)}
+              title="Add shortcut"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 9, width: 82 }}
+            >
+              <div style={{ width: 52, height: 52, borderRadius: 15, border: "1px dashed rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", color: "#8a8a8a" }}>
+                <Plus size={20} />
+              </div>
+              <span style={{ fontSize: 12, color: "#8a8a8a" }}>Add</span>
             </button>
-          ))}
+          )}
         </div>
+
+        {adding && (
+          <form
+            onSubmit={submitAdd}
+            style={{ display: "flex", gap: 8, marginTop: 16, width: "100%", maxWidth: 520, alignItems: "center" }}
+          >
+            <input
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              placeholder="Name (optional)"
+              spellCheck={false}
+              style={{ width: 150, background: "#1c1c1c", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "9px 12px", color: "#ededed", fontSize: 13, fontFamily: "inherit", outline: "none" }}
+            />
+            <input
+              autoFocus
+              value={addUrl}
+              onChange={(e) => setAddUrl(e.target.value)}
+              placeholder="example.com"
+              spellCheck={false}
+              style={{ flex: 1, background: "#1c1c1c", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "9px 12px", color: "#ededed", fontSize: 13, fontFamily: "inherit", outline: "none" }}
+            />
+            <button type="submit" style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false);
+                setAddName("");
+                setAddUrl("");
+              }}
+              style={{ background: "#2a2a32", color: "#cfcfcf", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+          </form>
+        )}
 
         {/* Weather */}
         {showWeather && (

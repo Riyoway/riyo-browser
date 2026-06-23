@@ -329,27 +329,122 @@ const DEFAULT_SITES: Site[] = [
   { name: "Wikipedia", url: "https://wikipedia.org", host: "wikipedia.org" },
 ];
 
-/** Most-visited sites from history, padded with curated defaults to `max`. */
-export function topSites(max = 8): Site[] {
+export const MAX_SITES = 8;
+const PINNED_KEY = "blankpage.pinned";
+const HIDDEN_KEY = "blankpage.hidden";
+
+function isWebUrl(url: string): boolean {
+  try {
+    return /^https?:$/.test(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
+export function loadPinned(): Site[] {
+  try {
+    const d = JSON.parse(localStorage.getItem(PINNED_KEY) || "[]");
+    if (Array.isArray(d))
+      return d
+        .filter((s) => s && s.url && isWebUrl(s.url))
+        .map((s) => ({ url: s.url, host: hostOf(s.url), name: s.name || nameFromHost(hostOf(s.url)) }));
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+function savePinned(sites: Site[]): Site[] {
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify(sites.slice(0, MAX_SITES)));
+  } catch {
+    /* ignore */
+  }
+  return sites;
+}
+function loadHidden(): Set<string> {
+  try {
+    const d = JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]");
+    if (Array.isArray(d)) return new Set(d);
+  } catch {
+    /* ignore */
+  }
+  return new Set();
+}
+function saveHidden(hosts: Set<string>) {
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hosts]));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isPinned(host: string): boolean {
+  return loadPinned().some((s) => s.host === host);
+}
+/** Pin a site (keeps it on the grid); also un-hides it. Returns the new grid. */
+export function pinSite(site: Site): void {
+  const pinned = loadPinned();
+  if (!pinned.some((s) => s.host === site.host)) savePinned([...pinned, site]);
+  const hidden = loadHidden();
+  if (hidden.delete(site.host)) saveHidden(hidden);
+}
+export function unpinSite(host: string): void {
+  savePinned(loadPinned().filter((s) => s.host !== host));
+}
+/** Remove a tile: unpin if pinned, otherwise hide the auto-suggested site. */
+export function removeSite(host: string): void {
+  const pinned = loadPinned();
+  if (pinned.some((s) => s.host === host)) {
+    savePinned(pinned.filter((s) => s.host !== host));
+  } else {
+    const hidden = loadHidden();
+    hidden.add(host);
+    saveHidden(hidden);
+  }
+}
+/** Add a user shortcut (pinned). Returns false if the URL is invalid. */
+export function addSite(name: string, rawUrl: string): boolean {
+  let url = rawUrl.trim();
+  if (!url) return false;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = "https://" + url;
+  if (!isWebUrl(url)) return false;
+  const host = hostOf(url);
+  if (!host) return false;
+  pinSite({ url, host, name: name.trim() || nameFromHost(host) });
+  return true;
+}
+
+/** The shortcuts grid: pinned first, then most-visited from history, padded with
+ *  curated defaults — deduped by host AND display name, hidden sites excluded. */
+export function topSites(max = MAX_SITES): Site[] {
+  const pinned = loadPinned();
+  const hidden = loadHidden();
+  const usedHosts = new Set(pinned.map((s) => s.host));
+  const usedNames = new Set(pinned.map((s) => s.name.toLowerCase()));
+  const result: Site[] = [...pinned];
+
+  const add = (s: Site) => {
+    if (result.length >= max) return;
+    if (!s.host || usedHosts.has(s.host) || hidden.has(s.host)) return;
+    if (usedNames.has(s.name.toLowerCase())) return;
+    result.push(s);
+    usedHosts.add(s.host);
+    usedNames.add(s.name.toLowerCase());
+  };
+
   const counts = new Map<string, { count: number; url: string }>();
   for (const h of loadHistory()) {
+    if (!isWebUrl(h.url)) continue;
     const host = hostOf(h.url);
     if (!host) continue;
     const e = counts.get(host);
     if (e) e.count++;
     else counts.set(host, { count: 1, url: originOf(h.url) });
   }
-  const ranked = [...counts.entries()]
+  [...counts.entries()]
     .sort((a, b) => b[1].count - a[1].count)
-    .map(([host, v]) => ({ name: nameFromHost(host), url: v.url, host }));
+    .forEach(([host, v]) => add({ name: nameFromHost(host), url: v.url, host }));
 
-  const seen = new Set(ranked.map((s) => s.host));
-  for (const d of DEFAULT_SITES) {
-    if (ranked.length >= max) break;
-    if (!seen.has(d.host)) {
-      ranked.push(d);
-      seen.add(d.host);
-    }
-  }
-  return ranked.slice(0, max);
+  for (const d of DEFAULT_SITES) add(d);
+  return result.slice(0, max);
 }
