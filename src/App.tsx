@@ -471,14 +471,21 @@ export function App() {
     <div className="flex h-full flex-col">
       {/* Tab strip doubles as the custom title bar (native decorations are off). */}
       <div className="flex select-none items-stretch bg-content1">
-        <div className="no-scrollbar flex min-w-0 flex-[0_1_auto] items-end gap-0.5 overflow-x-auto px-2 pt-1.5">
+        <div
+          className="no-scrollbar flex min-w-0 flex-[0_1_auto] items-end gap-0.5 overflow-x-auto px-2 pt-1.5"
+          // The strip has no vertical scroll, so map wheel to horizontal: tabs
+          // keep their full width and overflow stays reachable (the bar's own
+          // scrollbar is hidden).
+          onWheel={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollWidth > el.clientWidth) el.scrollLeft += e.deltaY + e.deltaX;
+          }}
+        >
           {tabs.map((t) => (
             <div
               key={t.id}
-              // Tabs share the strip: they sit at 180px but shrink down to 56px
-              // so a full strip stays visible instead of overflowing/hiding.
               className={
-                "group flex min-w-[56px] max-w-[180px] flex-[0_1_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
+                "group flex w-[180px] flex-[0_0_180px] cursor-default items-center gap-2 whitespace-nowrap rounded-t-lg px-2.5 py-2 text-[12.5px] transition-colors " +
                 (t.id === activeId
                   ? "bg-background text-foreground"
                   : "text-foreground-500 hover:bg-content2 hover:text-foreground")
@@ -494,12 +501,7 @@ export function App() {
             >
               <span className="min-w-0 flex-1 overflow-hidden text-ellipsis">{t.title || t.url}</span>
               <span
-                // Hidden on narrow inactive tabs to free room for the title; the
-                // active tab always keeps its close button.
-                className={
-                  "h-[18px] w-[18px] shrink-0 items-center justify-center rounded opacity-60 transition hover:bg-content3 hover:opacity-100 " +
-                  (t.id === activeId ? "inline-flex" : "hidden group-hover:inline-flex")
-                }
+                className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded opacity-60 transition hover:bg-content3 hover:opacity-100"
                 role="button"
                 title="Close tab"
                 onClick={(e) => {
