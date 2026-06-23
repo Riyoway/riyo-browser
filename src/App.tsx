@@ -164,13 +164,23 @@ export function App() {
     setAddr(u && u !== NEWTAB ? u : "");
   }, [activeId, activeTab?.url]);
 
-  // Events from the webviews.
+  // Events from the webviews. listen() is async, so under React StrictMode's
+  // mount→unmount→remount the cleanup can run before a listen promise resolves —
+  // leaking the first listener so handlers fire twice (e.g. a Ctrl/middle click
+  // opening the same link in two tabs). The `disposed` flag makes a late-resolving
+  // registration unlisten itself immediately.
   useEffect(() => {
+    let disposed = false;
     const uns: Array<() => void> = [];
-    events.onNav((e) => setTabUrl(e.id, e.url)).then((f) => uns.push(f));
-    events.onNewTab((url) => addTab(url)).then((f) => uns.push(f));
-    events.onMainShown(() => sync()).then((f) => uns.push(f));
-    return () => uns.forEach((f) => f());
+    const track = (p: Promise<() => void>) =>
+      p.then((f) => (disposed ? f() : uns.push(f))).catch(() => {});
+    track(events.onNav((e) => setTabUrl(e.id, e.url)));
+    track(events.onNewTab((url) => addTab(url)));
+    track(events.onMainShown(() => sync()));
+    return () => {
+      disposed = true;
+      uns.forEach((f) => f());
+    };
   }, [addTab, setTabUrl, sync]);
 
   // ---- handlers ----
